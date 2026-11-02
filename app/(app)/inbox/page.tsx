@@ -1,0 +1,113 @@
+"use client";
+import { useEffect, useRef, useState } from "react";
+import { api, useApi, when } from "@/components/api";
+
+const tick: Record<string, string> = { queued: "⏳", sent: "✓", delivered: "✓✓", read: "✓✓", failed: "⚠", received: "" };
+
+export default function Inbox() {
+  const [filter, setFilter] = useState("all");
+  const [q, setQ] = useState("");
+  const [sel, setSel] = useState<string | null>(null);
+  const list = useApi<any[]>(`/api/conversations?filter=${filter}&q=${encodeURIComponent(q)}`, 3000);
+  const chat = useApi<any>(sel ? `/api/conversations/${sel}` : null, 2500);
+  const tpls = useApi<any[]>("/api/templates");
+  const [text, setText] = useState(""); const [note, setNote] = useState(false); const [err, setErr] = useState("");
+  const [tpl, setTpl] = useState(""); const [tplParams, setTplParams] = useState("");
+  const [sim, setSim] = useState({ phone: "", text: "Hi!" });
+  const bottom = useRef<HTMLDivElement>(null);
+  const n = chat.data?.messages?.length;
+  useEffect(() => { bottom.current?.scrollIntoView(); }, [n, sel]);
+  const c = chat.data?.conversation;
+
+  async function send() {
+    setErr("");
+    try {
+      if (tpl) await api(`/api/conversations/${sel}/messages`, "POST", { template: tpl, params: tplParams ? tplParams.split("|").map((x) => x.trim()) : [] });
+      else await api(`/api/conversations/${sel}/messages`, "POST", { text, note });
+      setText(""); setTpl(""); setTplParams(""); chat.reload(); list.reload();
+    } catch (e: any) { setErr(e.message); }
+  }
+  async function patch(b: object) { await api(`/api/conversations/${sel}`, "PATCH", b); chat.reload(); list.reload(); }
+  const approved = (tpls.data ?? []).filter((t) => t.status === "APPROVED");
+
+  return (
+    <div className="inbox">
+      <div className="list">
+        <div style={{ padding: 10 }}>
+          <input placeholder="Search name or phone" value={q} onChange={(e) => setQ(e.target.value)} />
+          <div className="row wrap small" style={{ marginTop: 8 }}>
+            {["all", "mine", "unassigned", "unread", "closed"].map((f) => (
+              <span key={f} className={"pill" + (filter === f ? " ok" : "")} style={{ cursor: "pointer" }} onClick={() => setFilter(f)}>{f}</span>
+            ))}
+          </div>
+        </div>
+        {list.data?.map((r) => (
+          <div key={r.id} className={"item" + (sel === r.id ? " on" : "")} onClick={() => setSel(r.id)}>
+            <div className="t"><b>{r.name || "+" + r.phone}</b>{r.unread > 0 && <span className="dot">{r.unread}</span>}</div>
+            <div className="p">{r.last_preview}</div>
+          </div>
+        ))}
+        {list.data?.length === 0 && <p className="muted" style={{ padding: 14 }}>No conversations yet. Use the simulator below, or connect WhatsApp in Settings.</p>}
+        <details style={{ padding: 10 }}>
+          <summary className="small muted">Simulate an inbound message</summary>
+          <label>Phone</label><input value={sim.phone} onChange={(e) => setSim({ ...sim, phone: e.target.value })} placeholder="919876543210" />
+          <label>Text</label><input value={sim.text} onChange={(e) => setSim({ ...sim, text: e.target.value })} />
+          <button className="btn mt" onClick={async () => { await api("/api/dev/simulate", "POST", sim); list.reload(); }}>Simulate</button>
+        </details>
+      </div>
+
+      <div className="chat">
+        {!c ? <p className="muted" style={{ padding: 20 }}>Select a conversation</p> : (<>
+          <div className="row between" style={{ padding: "10px 14px", borderBottom: "1px solid var(--line)" }}>
+            <div><b>{c.name || "+" + c.phone}</b> <span className="muted small">+{c.phone}</span>
+              {!c.opted_in && <span className="pill bad">opted out</span>}</div>
+            <div className="row">
+              <select style={{ width: 150 }} value={c.assigned_to ?? ""} onChange={(e) => patch({ assigned_to: e.target.value })}>
+                <option value="">Unassigned</option>{chat.data.agents.map((a: any) => <option key={a.id} value={a.id}>{a.name}</option>)}
+              </select>
+              <button className="btn ghost" onClick={() => patch({ status: c.status === "closed" ? "open" : "closed" })}>{c.status === "closed" ? "Reopen" : "Close"}</button>
+            </div>
+          </div>
+          <div className="msgs">
+            {chat.data.messages.map((m: any) => (
+              <div key={m.id} className={"b " + (m.is_note ? "note" : m.direction)}>
+                {m.is_note ? "📝 " : ""}{m.body}
+                <small>{m.template_name ? `template · ${m.template_name} · ` : ""}{when(m.created_at)} {m.direction === "out" && !m.is_note ? tick[m.status] : ""}{m.error ? ` — ${m.error}` : ""}</small>
+              </div>
+            ))}
+            <div ref={bottom} />
+          </div>
+          <div className="composer">
+            {!c.windowOpen && !note && <p className="small" style={{ color: "var(--danger)", margin: "0 0 6px" }}>The 24-hour window is closed — you can only send an approved template.</p>}
+            {err && <p className="small" style={{ color: "var(--danger)", margin: "0 0 6px" }}>{err}</p>}
+            <div className="row wrap">
+              <select style={{ width: 200 }} value={tpl} onChange={(e) => setTpl(e.target.value)}>
+                <option value="">Free text{c.windowOpen ? "" : " (disabled)"}</option>{approved.map((t) => <option key={t.id} value={t.name}>Template: {t.name}</option>)}
+              </select>
+              {tpl && <input style={{ flex: 1 }} placeholder="Variables separated by |  e.g. Asha | #1042" value={tplParams} onChange={(e) => setTplParams(e.target.value)} />}
+            </div>
+            {!tpl && <div className="row mt"><textarea rows={2} value={text} onChange={(e) => setText(e.target.value)} placeholder={note ? "Internal note (not sent)" : "Type a message"} onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }} /></div>}
+            <div className="row between mt">
+              <label className="row small" style={{ margin: 0 }}><input type="checkbox" style={{ width: "auto" }} checked={note} onChange={(e) => setNote(e.target.checked)} /> Internal note</label>
+              <button className="btn" onClick={send} disabled={!tpl && !text.trim()}>{note ? "Add note" : "Send"}</button>
+            </div>
+          </div>
+        </>)}
+      </div>
+
+      <div className="info">
+        {c && (<>
+          <h2>Contact</h2>
+          <p style={{ margin: 0 }}>{c.name || "—"}<br /><span className="muted">+{c.phone}</span><br /><span className="muted">{c.email}</span></p>
+          <label>Tags</label>
+          <div>{c.tags.map((t: string) => <span key={t} className="pill">{t}</span>)}</div>
+          <input style={{ marginTop: 6 }} placeholder="Add tag + Enter" onKeyDown={async (e) => { const v = (e.target as HTMLInputElement).value.trim(); if (e.key === "Enter" && v) { await patch({ tags: [...c.tags, v] }); (e.target as HTMLInputElement).value = ""; } }} />
+          <label>Bot</label>
+          <button className="btn ghost" onClick={() => patch({ bot_paused: !c.bot_paused })}>{c.bot_paused ? "Resume automations" : "Pause automations"}</button>
+          <p className="small muted">Automations pause automatically when an agent replies.</p>
+          {Object.keys(c.attrs).length > 0 && (<><label>Attributes</label><pre>{JSON.stringify(c.attrs, null, 1)}</pre></>)}
+        </>)}
+      </div>
+    </div>
+  );
+}

@@ -1,0 +1,98 @@
+import { DatabaseSync } from "node:sqlite";
+import fs from "node:fs";
+import path from "node:path";
+import crypto from "node:crypto";
+
+const SCHEMA = `
+CREATE TABLE IF NOT EXISTS workspaces (
+  id TEXT PRIMARY KEY, name TEXT NOT NULL,
+  wa_phone_number_id TEXT, wa_waba_id TEXT, wa_token TEXT,
+  wa_verify_token TEXT NOT NULL, wa_app_secret TEXT,
+  created_at INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS users (
+  id TEXT PRIMARY KEY, workspace_id TEXT NOT NULL, email TEXT NOT NULL UNIQUE,
+  name TEXT NOT NULL, password_hash TEXT NOT NULL, role TEXT NOT NULL DEFAULT 'admin',
+  created_at INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS contacts (
+  id TEXT PRIMARY KEY, workspace_id TEXT NOT NULL, phone TEXT NOT NULL,
+  name TEXT, email TEXT, attrs TEXT NOT NULL DEFAULT '{}', tags TEXT NOT NULL DEFAULT '[]',
+  opted_in INTEGER NOT NULL DEFAULT 1, created_at INTEGER NOT NULL,
+  UNIQUE(workspace_id, phone)
+);
+CREATE TABLE IF NOT EXISTS conversations (
+  id TEXT PRIMARY KEY, workspace_id TEXT NOT NULL, contact_id TEXT NOT NULL UNIQUE,
+  status TEXT NOT NULL DEFAULT 'open', assigned_to TEXT, unread INTEGER NOT NULL DEFAULT 0,
+  last_message_at INTEGER, last_inbound_at INTEGER, last_preview TEXT,
+  bot_paused INTEGER NOT NULL DEFAULT 0
+);
+CREATE TABLE IF NOT EXISTS messages (
+  id TEXT PRIMARY KEY, workspace_id TEXT NOT NULL, conversation_id TEXT NOT NULL,
+  contact_id TEXT NOT NULL, direction TEXT NOT NULL, type TEXT NOT NULL DEFAULT 'text',
+  body TEXT, template_name TEXT, media_url TEXT, wa_message_id TEXT, params TEXT,
+  status TEXT NOT NULL DEFAULT 'queued', error TEXT, campaign_id TEXT,
+  is_note INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_msg_conv ON messages(conversation_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_msg_wa ON messages(wa_message_id);
+CREATE TABLE IF NOT EXISTS templates (
+  id TEXT PRIMARY KEY, workspace_id TEXT NOT NULL, name TEXT NOT NULL, language TEXT NOT NULL DEFAULT 'en',
+  category TEXT NOT NULL DEFAULT 'MARKETING', body TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'DRAFT',
+  meta_id TEXT, created_at INTEGER NOT NULL, UNIQUE(workspace_id, name, language)
+);
+CREATE TABLE IF NOT EXISTS campaigns (
+  id TEXT PRIMARY KEY, workspace_id TEXT NOT NULL, name TEXT NOT NULL, template_id TEXT NOT NULL,
+  segment_tag TEXT, status TEXT NOT NULL DEFAULT 'draft', scheduled_at INTEGER,
+  total INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS api_keys (
+  id TEXT PRIMARY KEY, workspace_id TEXT NOT NULL, kind TEXT NOT NULL, label TEXT,
+  key_hash TEXT NOT NULL UNIQUE, key_prefix TEXT NOT NULL, allowed_origins TEXT NOT NULL DEFAULT '[]',
+  created_at INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS events (
+  id TEXT PRIMARY KEY, workspace_id TEXT NOT NULL, contact_id TEXT, name TEXT NOT NULL,
+  payload TEXT NOT NULL DEFAULT '{}', idempotency_key TEXT, created_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_events_contact ON events(contact_id, name, created_at);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_events_idem ON events(workspace_id, idempotency_key) WHERE idempotency_key IS NOT NULL;
+CREATE TABLE IF NOT EXISTS automations (
+  id TEXT PRIMARY KEY, workspace_id TEXT NOT NULL, name TEXT NOT NULL,
+  trigger_type TEXT NOT NULL, trigger_value TEXT NOT NULL DEFAULT '',
+  steps TEXT NOT NULL DEFAULT '[]', active INTEGER NOT NULL DEFAULT 1, created_at INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS outbound_webhooks (
+  id TEXT PRIMARY KEY, workspace_id TEXT NOT NULL, url TEXT NOT NULL, secret TEXT NOT NULL,
+  created_at INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS jobs (
+  id TEXT PRIMARY KEY, workspace_id TEXT, type TEXT NOT NULL, payload TEXT NOT NULL DEFAULT '{}',
+  run_at INTEGER NOT NULL, status TEXT NOT NULL DEFAULT 'pending', attempts INTEGER NOT NULL DEFAULT 0,
+  last_error TEXT, created_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_jobs_due ON jobs(status, run_at);
+`;
+
+const g = globalThis as unknown as { __db?: DatabaseSync };
+
+export function db(): DatabaseSync {
+  if (!g.__db) {
+    const file = process.env.DATABASE_PATH || "./data/app.db";
+    fs.mkdirSync(path.dirname(path.resolve(file)), { recursive: true });
+    const d = new DatabaseSync(file);
+    d.exec("PRAGMA journal_mode = WAL; PRAGMA busy_timeout = 5000;");
+    d.exec(SCHEMA);
+    g.__db = d;
+  }
+  return g.__db;
+}
+
+export const id = (prefix = "") => prefix + crypto.randomBytes(9).toString("base64url");
+export const now = () => Date.now();
+
+type Row = Record<string, any>;
+export const all = <T = Row>(sql: string, ...p: any[]): T[] => db().prepare(sql).all(...p) as T[];
+export const get = <T = Row>(sql: string, ...p: any[]): T | undefined =>
+  db().prepare(sql).get(...p) as T | undefined;
+export const run = (sql: string, ...p: any[]) => db().prepare(sql).run(...p);
