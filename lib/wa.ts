@@ -101,3 +101,10 @@ export async function sendFlow(c: WaConfig, to: string, f: { text: string; flowI
   });
   return d.messages?.[0]?.id;
 }
+
+/** Verifies the saved credentials against Meta and returns what Meta knows about the sending number. */
+export async function checkConnection(c: WaConfig) {
+  if (!c.token || !c.phoneNumberId) throw new WaError("Add the Phone number ID and access token first", true);
+  const d = await graph(c, `${c.phoneNumberId}?fields=display_phone_number,verified_name,quality_rating,name_status,code_verification_status`);
+  return { displayPhone: d.display_phone_number as string, verifiedName: d.verified_name as string, quality: d.quality_rating as string, nameStatus: d.name_status as string };
+}

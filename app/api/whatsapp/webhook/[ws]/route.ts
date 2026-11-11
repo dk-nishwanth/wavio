@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import { get } from "@/lib/db";
 import { applyStatus, receiveInbound } from "@/lib/core";
 import { handle, json } from "@/lib/http";
+import { metaCfg, saveMetaCfg } from "@/lib/metaleads";
 
 type Ctx = { params: Promise<{ ws: string }> };
 
@@ -27,6 +28,7 @@ export const POST = handle(async (req: Request, { params }: Ctx) => {
     if (got.length !== expected.length || !crypto.timingSafeEqual(Buffer.from(got), Buffer.from(expected))) return json({ error: "Bad signature" }, 401);
   }
   const body = JSON.parse(raw);
+  saveMetaCfg(ws, { ...metaCfg(ws), last_webhook_at: Date.now() });
   for (const entry of body.entry ?? []) {
     for (const ch of entry.changes ?? []) {
       const v = ch.value ?? {};

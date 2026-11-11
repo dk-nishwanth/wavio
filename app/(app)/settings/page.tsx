@@ -25,6 +25,7 @@ export default function Settings() {
       {data && <PaymentsCard data={data.payments} reload={reload} />}
       {data && <MetaCard data={data.meta} reload={reload} />}
       {data && <IntegrationsCard data={data.integrations} reload={reload} />}
+      {data && <TestCard disabled={data.mock} />}
       {data && <div className="card mt" style={{ maxWidth: 620 }}>
         <h2>Webhook (paste into Meta → WhatsApp → Configuration)</h2>
         <label>Callback URL (must be public HTTPS — use a tunnel like ngrok while developing)</label><input readOnly value={data.webhookUrl} onFocus={(e) => e.target.select()} />
@@ -110,6 +111,26 @@ function BusinessCard({ data, reload }: { data: any; reload: () => void }) {
         <div className="grow"><label>Business name</label><input value={f.name} onChange={set("name")} placeholder="Jawai Retreat" /></div></div>
       <div className="row"><div className="grow"><label>Location</label><input value={f.location} onChange={set("location")} /></div><div style={{ width: 130 }}><label>Check-in</label><input value={f.check_in_time} onChange={set("check_in_time")} /></div><div style={{ width: 130 }}><label>Check-out</label><input value={f.check_out_time} onChange={set("check_out_time")} /></div></div>
       <div className="row mt"><button className="btn" onClick={async () => { await api("/api/settings", "PUT", { industry: f.industry, business: { name: f.name, location: f.location, check_in_time: f.check_in_time, check_out_time: f.check_out_time } }); setMsg("Saved — reload to update menu labels"); reload(); }}>Save</button><span className="muted small">{msg}</span></div>
+    </div>
+  );
+}
+
+function TestCard({ disabled }: { disabled: boolean }) {
+  const [to, setTo] = useState(""); const [r, setR] = useState<any>(null); const [busy, setBusy] = useState(false);
+  const run = async (send: boolean) => { setBusy(true); try { setR(await api("/api/settings/test", "POST", send ? { to } : {})); } catch (e: any) { setR({ ok: false, error: e.message }); } setBusy(false); };
+  return (
+    <div className="card mt" style={{ maxWidth: 620 }}>
+      <h2>Test your WhatsApp connection</h2>
+      {disabled && <p className="muted small">Save your Phone number ID and access token above first.</p>}
+      <div className="row"><button className="btn" disabled={disabled || busy} onClick={() => run(false)}>Check connection</button></div>
+      <label>Send Meta&apos;s test message (hello_world) to a verified recipient number</label>
+      <div className="row"><input placeholder="919876543210 (with country code)" value={to} onChange={(e) => setTo(e.target.value)} /><button className="btn ghost" disabled={disabled || busy || !to} onClick={() => run(true)}>Send test</button></div>
+      {r && (<div className={"banner mt " + (r.ok ? "ok" : "")}>
+        {r.ok ? "Connected ✓" : r.error}
+        {r.connection && <div className="small">Number {r.connection.displayPhone} · name “{r.connection.verifiedName}” ({r.connection.nameStatus}) · quality {r.connection.quality}</div>}
+        {r.messageId && <div className="small">Test message sent. If it doesn&apos;t arrive, the number isn&apos;t on your recipient list yet.</div>}
+        <div className="small">Webhook: {r.webhookLastSeen ? "last event received " + new Date(r.webhookLastSeen).toLocaleString() : "no events received yet — finish the webhook step"}</div>
+      </div>)}
     </div>
   );
 }
