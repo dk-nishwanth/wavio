@@ -14,14 +14,16 @@ const I = {
   bag: (<><path d="M5 8h14l-1 12H6z" /><path d="M9 8V6a3 3 0 0 1 6 0v2" /></>),
   receipt: (<><path d="M6 3h12v18l-3-2-3 2-3-2-3 2z" /><path d="M9 8h6M9 12h6" /></>),
   card: (<><rect x="2.5" y="5" width="19" height="14" rx="2" /><path d="M2.5 10h19" /></>),
+  bot: (<><rect x="4" y="8" width="16" height="11" rx="3" /><path d="M12 4v4M9 13h.01M15 13h.01M9 17h6" /></>),
+  inbox2: <path d="M4 13h4l2 3h4l2-3h4M4 13V6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v7M4 13v5a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-5" />,
   zap: <path d="M13 2 4 14h7l-1 8 9-12h-7z" />,
   code: <path d="m16 18 6-6-6-6M8 6l-6 6 6 6" />,
   cog: (<><circle cx="12" cy="12" r="3" /><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M19.1 4.9 17 7M7 17l-2.1 2.1" /></>),
 };
 
 const groups: { title: string; links: [string, string, keyof typeof I][] }[] = [
-  { title: "Engage", links: [["/home", "Home", "home"], ["/inbox", "Inbox", "inbox"], ["/contacts", "Contacts", "users"], ["/leads", "Leads", "target"]] },
-  { title: "Grow", links: [["/templates", "Templates", "file"], ["/catalog", "Catalog", "bag"], ["/orders", "Orders", "receipt"], ["/campaigns", "Broadcasts", "send"], ["/automations", "Automations", "zap"]] },
+  { title: "Engage", links: [["/home", "Home", "home"], ["/inbox", "Inbox", "inbox"], ["/requests", "Requests", "inbox2"], ["/contacts", "Contacts", "users"], ["/leads", "Leads", "target"]] },
+  { title: "Grow", links: [["/concierge", "AI Concierge", "bot"], ["/templates", "Templates", "file"], ["/catalog", "Catalog", "bag"], ["/orders", "Orders", "receipt"], ["/campaigns", "Broadcasts", "send"], ["/automations", "Automations", "zap"]] },
   { title: "Build", links: [["/team", "Team", "users"], ["/billing", "Billing", "card"], ["/developers", "Developers", "code"], ["/settings", "Settings", "cog"]] },
 ];
 
@@ -29,6 +31,7 @@ export default function Nav({ name, terms, showBilling = false }: { name: string
   const label = (l: string) => (l === "Catalog" ? terms.catalog : l === "Orders" ? terms.orders : l);
   const path = usePathname();
   const [unread, setUnread] = useState(0);
+  const [reqs, setReqs] = useState(0);
   const [perm, setPerm] = useState<string>("default");
   const prev = useRef<number | null>(null);
   useEffect(() => {
@@ -36,14 +39,16 @@ export default function Nav({ name, terms, showBilling = false }: { name: string
     let stop = false;
     const tick = async () => {
       try {
-        const s = await api<{ unread: number }>("/api/stats");
+        const s = await api<{ unread: number; pendingRequests: number }>("/api/stats");
         if (stop) return;
-        setUnread(s.unread);
-        document.title = (s.unread > 0 ? `(${s.unread}) ` : "") + "Wavio";
-        if (prev.current !== null && s.unread > prev.current && typeof Notification !== "undefined" && Notification.permission === "granted" && document.hidden) {
-          new Notification("New WhatsApp message", { body: `${s.unread} conversation${s.unread > 1 ? "s" : ""} waiting for a reply`, icon: "/logo-mark.svg", tag: "wavio-unread" });
+        setUnread(s.unread); setReqs(s.pendingRequests);
+        const total = s.unread + s.pendingRequests;
+        document.title = (total > 0 ? `(${total}) ` : "") + "Wavio";
+        const now = s.unread + s.pendingRequests;
+        if (prev.current !== null && now > prev.current && typeof Notification !== "undefined" && Notification.permission === "granted" && document.hidden) {
+          new Notification("New WhatsApp message", { body: `${s.unread} chat${s.unread === 1 ? "" : "s"} waiting, ${s.pendingRequests} request${s.pendingRequests === 1 ? "" : "s"} to review`, icon: "/logo-mark.svg", tag: "wavio-unread" });
         }
-        prev.current = s.unread;
+        prev.current = now;
       } catch { /* signed out or offline: try again next tick */ }
     };
     tick();
@@ -58,7 +63,7 @@ export default function Nav({ name, terms, showBilling = false }: { name: string
           <div className="grp">{g.title}</div>
           {g.links.filter(([href]) => showBilling || href !== "/billing").map(([href, l, icon]) => (
             <Link key={href} href={href} className={"nav" + (path.startsWith(href) ? " on" : "")}>
-              <svg viewBox="0 0 24 24">{I[icon]}</svg>{label(l)}{href === "/inbox" && unread > 0 && <span className="dot" style={{ marginLeft: "auto" }}>{unread}</span>}
+              <svg viewBox="0 0 24 24">{I[icon]}</svg>{label(l)}{href === "/inbox" && unread > 0 && <span className="dot" style={{ marginLeft: "auto" }}>{unread}</span>}{href === "/requests" && reqs > 0 && <span className="dot" style={{ marginLeft: "auto" }}>{reqs}</span>}
             </Link>
           ))}
         </div>

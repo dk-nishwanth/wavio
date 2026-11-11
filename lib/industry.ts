@@ -1,7 +1,7 @@
 import { metaCfg, saveMetaCfg } from "./metaleads";
 
 export type Industry = "general" | "resort";
-export type Business = { name?: string; location?: string; check_in_time?: string; check_out_time?: string };
+export type Business = { name?: string; location?: string; check_in_time?: string; check_out_time?: string; address?: string; latitude?: number; longitude?: number; maps_url?: string; phone?: string };
 
 const ALL_STAGES = ["new", "contacted", "qualified", "proposal", "won", "lost"] as const;
 const PRESETS: Record<Industry, { stages: Record<string, string>; terms: { catalog: string; orders: string; order: string } }> = {

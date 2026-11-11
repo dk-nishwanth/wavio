@@ -5,6 +5,7 @@ import { HttpError } from "./auth";
 import { devToolsEnabled } from "./env";
 import { ingestEvent } from "./events";
 import { logActivity } from "./crm";
+import { completeBookingRequest } from "./requests";
 
 export type PayCfg = {
   razorpay_key_id?: string; razorpay_key_secret?: string; razorpay_webhook_secret?: string;
@@ -58,6 +59,7 @@ export function markPaid(orderId: string, ref?: string) {
   run("UPDATE orders SET status='paid', paid_at=?, payment_ref=COALESCE(?,payment_ref) WHERE id=?", now(), ref ?? null, orderId);
   const contact = get<any>("SELECT phone FROM contacts WHERE id=?", o.contact_id);
   logActivity(o.workspace_id, o.contact_id, "order", `Order #${o.number} paid (${o.currency} ${o.total})`);
+  if (o.request_id) completeBookingRequest(o.request_id);
   if (contact) ingestEvent(o.workspace_id, { name: "payment_completed", phone: contact.phone, payload: { order_id: String(o.number), order_ref: o.id, total: o.total, currency: o.currency }, idempotencyKey: `paid-${o.id}` });
 }
 

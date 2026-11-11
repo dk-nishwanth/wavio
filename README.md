@@ -8,9 +8,18 @@ npm install
 cp .env.example .env.local
 npm run dev      # app + job loop on http://localhost:3000
 npm run seed -- <username> <password> "My Resort"   # optional first account
-npm test         # 38 automated tests
+npm test         # automated tests
 ```
 With no WhatsApp credentials the app runs in **test mode**: messages are simulated and the inbox has a simulator. In production an unconnected number fails loudly instead.
+
+## AI concierge
+Guests chat on WhatsApp; the concierge answers, shares photos and your location, collects details, raises requests for your team and hands over when unsure. Set it up under **AI Concierge**:
+1. **Behaviour**: paste an Anthropic API key (or set `ANTHROPIC_API_KEY`), write the instructions, choose what it may do, and switch it on. `AI_MODEL` overrides the default model.
+2. **Knowledge**: paste text, add a web page, or upload a PDF/text file. It answers only from this, your Catalog prices and your business profile.
+3. **Library**: upload photos and brochures with clear labels; it sends them by label.
+4. **Playground**: chat as a guest and see exactly what it would say and do. Nothing is sent or saved.
+
+Bookings, cancellations and changes always land in **Requests** for your approval (you can set an advance; the guest gets a payment link and the stay is confirmed when they pay). Only service, callback and "other" requests can be auto-approved. It stops when a team member replies or it hands the chat over (use *Resume bot* in the inbox), and when it fails it hands over rather than going silent. It replies to guest messages that no chatbot flow handles, so a first-message flow such as the resort enquiry bot answers first; switch that flow off if you want the AI to handle first messages too.
 
 ## Going live with WhatsApp
 Settings → paste Phone number ID, WABA ID, access token and app secret → **Check connection** → **Send test**. Expose the app on a public https address, then add the callback URL and verify token shown in Settings to your Meta app (field `messages`). Template messages need Meta approval; free text works only within 24 hours of the guest's last message.

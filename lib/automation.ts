@@ -16,7 +16,8 @@ export type Step =
 type Ctx = { event?: Record<string, any>; text?: string };
 
 /** Finds active automations for this trigger and queues step 0 of each. */
-export function startAutomations(ws: string, contactId: string, type: "event" | "keyword" | "first_message", ctx: Ctx & { name?: string }) {
+export function startAutomations(ws: string, contactId: string, type: "event" | "keyword" | "first_message", ctx: Ctx & { name?: string }): number {
+  let started = 0;
   const rows = all<any>("SELECT * FROM automations WHERE workspace_id=? AND active=1 AND trigger_type=?", ws, type);
   for (const a of rows) {
     const vals = String(a.trigger_value).split(",").map((s) => s.trim().toLowerCase()).filter(Boolean);
@@ -26,9 +27,11 @@ export function startAutomations(ws: string, contactId: string, type: "event" | 
       const t = (ctx.text ?? "").trim().toLowerCase();
       match = vals.some((v) => t === v || t.includes(v));
     } else match = true;
+    if (match) started++;
     if (match && a.graph) startFlow(a, contactId, { event: ctx.event, text: ctx.text });
     else if (match) enqueue("automation_step", { automationId: a.id, contactId, index: 0, startedAt: now(), ctx: { event: ctx.event, text: ctx.text } }, { workspaceId: ws });
   }
+  return started;
 }
 
 const lookup = (obj: any, path: string) => path.split(".").reduce((o, k) => (o == null ? o : o[k]), obj);

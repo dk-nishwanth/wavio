@@ -4,7 +4,7 @@ import { upsertContact } from "./core";
 import { ingestEvent } from "./events";
 import { logActivity, touchLead } from "./crm";
 
-export type MetaCfg = { last_webhook_at?: number; industry?: string; business?: { name?: string; location?: string; check_in_time?: string; check_out_time?: string }; page_token?: string; calcom_secret?: string; zoho?: { client_id: string; client_secret: string; refresh_token: string; region: string } };
+export type MetaCfg = { last_webhook_at?: number; industry?: string; business?: import("./industry").Business; ai_key?: string; ai?: { auto_approve?: string[] }; page_token?: string; calcom_secret?: string; zoho?: { client_id: string; client_secret: string; refresh_token: string; region: string } };
 export const metaCfg = (ws: string): MetaCfg => JSON.parse(decrypt(get<any>("SELECT meta_json FROM workspaces WHERE id=?", ws)?.meta_json) ?? "{}");
 export const saveMetaCfg = (ws: string, c: MetaCfg) => run("UPDATE workspaces SET meta_json=? WHERE id=?", encrypt(JSON.stringify(c)), ws);
 

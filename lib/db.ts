@@ -101,6 +101,42 @@ CREATE TABLE IF NOT EXISTS orders (
   created_at INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_orders_ws ON orders(workspace_id, created_at);
+CREATE TABLE IF NOT EXISTS flow_node_stats (
+  automation_id TEXT NOT NULL, node_id TEXT NOT NULL, visits INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (automation_id, node_id)
+);
+CREATE TABLE IF NOT EXISTS ai_agents (
+  id TEXT PRIMARY KEY, workspace_id TEXT NOT NULL, name TEXT NOT NULL, mode TEXT NOT NULL DEFAULT 'support',
+  instructions TEXT NOT NULL DEFAULT '', greeting TEXT NOT NULL DEFAULT '', model TEXT, temperature REAL NOT NULL DEFAULT 0.3,
+  enabled INTEGER NOT NULL DEFAULT 0, auto_reply INTEGER NOT NULL DEFAULT 0, actions TEXT NOT NULL DEFAULT '["add_tag","set_stage","handoff"]',
+  monthly_credit_limit INTEGER, created_at INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS kb_sources (
+  id TEXT PRIMARY KEY, workspace_id TEXT NOT NULL, kind TEXT NOT NULL, title TEXT NOT NULL, origin TEXT,
+  status TEXT NOT NULL DEFAULT 'ready', error TEXT, chars INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS kb_chunks (
+  id TEXT PRIMARY KEY, workspace_id TEXT NOT NULL, source_id TEXT NOT NULL, ord INTEGER NOT NULL, text TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_kb_chunks_src ON kb_chunks(source_id);
+CREATE VIRTUAL TABLE IF NOT EXISTS kb_fts USING fts5(text, chunk_id UNINDEXED, workspace_id UNINDEXED);
+CREATE TABLE IF NOT EXISTS ai_usage (
+  id TEXT PRIMARY KEY, workspace_id TEXT NOT NULL, contact_id TEXT, agent_id TEXT, input_tokens INTEGER NOT NULL DEFAULT 0,
+  output_tokens INTEGER NOT NULL DEFAULT 0, escalated INTEGER NOT NULL DEFAULT 0, source TEXT, created_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_ai_usage_ws ON ai_usage(workspace_id, created_at);
+CREATE TABLE IF NOT EXISTS incoming_hooks (
+  id TEXT PRIMARY KEY, workspace_id TEXT NOT NULL, token TEXT NOT NULL UNIQUE, name TEXT NOT NULL, event_name TEXT NOT NULL DEFAULT 'lead_received',
+  mapping TEXT NOT NULL DEFAULT '{}', opt_in INTEGER NOT NULL DEFAULT 0, tags TEXT NOT NULL DEFAULT '[]', last_at INTEGER, created_at INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS requests (
+  id TEXT PRIMARY KEY, workspace_id TEXT NOT NULL, contact_id TEXT NOT NULL, kind TEXT NOT NULL, summary TEXT NOT NULL,
+  details TEXT NOT NULL DEFAULT '{}', status TEXT NOT NULL DEFAULT 'open', created_by TEXT NOT NULL DEFAULT 'ai',
+  decided_by TEXT, decision_note TEXT, created_at INTEGER NOT NULL, decided_at INTEGER
+);
+CREATE INDEX IF NOT EXISTS idx_requests_ws ON requests(workspace_id, status, created_at);
+CREATE TABLE IF NOT EXISTS assets (
+  id TEXT PRIMARY KEY, workspace_id TEXT NOT NULL, path TEXT NOT NULL, mime TEXT NOT NULL, name TEXT NOT NULL, kind TEXT NOT NULL, label TEXT NOT NULL DEFAULT '', description TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL
+);
 CREATE TABLE IF NOT EXISTS rate_limits (key TEXT PRIMARY KEY, count INTEGER NOT NULL, reset_at INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS invoices (
   id TEXT PRIMARY KEY, workspace_id TEXT NOT NULL, number TEXT NOT NULL, plan TEXT NOT NULL, period TEXT NOT NULL,
@@ -143,6 +179,23 @@ export function db(): DatabaseSync {
     try { d.exec("ALTER TABLE messages ADD COLUMN media_mime TEXT"); } catch { /* exists */ }
     try { d.exec("ALTER TABLE messages ADD COLUMN media_name TEXT"); } catch { /* exists */ }
     try { d.exec("ALTER TABLE messages ADD COLUMN media_id TEXT"); } catch { /* exists */ }
+    try { d.exec("ALTER TABLE messages ADD COLUMN sent_by TEXT"); } catch { /* exists */ }
+    try { d.exec("ALTER TABLE messages ADD COLUMN ai INTEGER NOT NULL DEFAULT 0"); } catch { /* exists */ }
+    try { d.exec("ALTER TABLE conversations ADD COLUMN closed_at INTEGER"); } catch { /* exists */ }
+    try { d.exec("ALTER TABLE conversations ADD COLUMN ai_paused INTEGER NOT NULL DEFAULT 0"); } catch { /* exists */ }
+    try { d.exec("ALTER TABLE contacts ADD COLUMN status TEXT"); } catch { /* exists */ }
+    try { d.exec("ALTER TABLE contacts ADD COLUMN source TEXT"); } catch { /* exists */ }
+    try { d.exec("ALTER TABLE contacts ADD COLUMN contact_group TEXT"); } catch { /* exists */ }
+    try { d.exec("ALTER TABLE templates ADD COLUMN header_type TEXT"); } catch { /* exists */ }
+    try { d.exec("ALTER TABLE templates ADD COLUMN header_text TEXT"); } catch { /* exists */ }
+    try { d.exec("ALTER TABLE templates ADD COLUMN header_media_path TEXT"); } catch { /* exists */ }
+    try { d.exec("ALTER TABLE templates ADD COLUMN header_mime TEXT"); } catch { /* exists */ }
+    try { d.exec("ALTER TABLE templates ADD COLUMN footer TEXT"); } catch { /* exists */ }
+    try { d.exec("ALTER TABLE templates ADD COLUMN buttons TEXT"); } catch { /* exists */ }
+    try { d.exec("ALTER TABLE templates ADD COLUMN header_media_id TEXT"); } catch { /* exists */ }
+    try { d.exec("ALTER TABLE templates ADD COLUMN header_media_expires INTEGER"); } catch { /* exists */ }
+    try { d.exec("ALTER TABLE campaigns ADD COLUMN var_map TEXT"); } catch { /* exists */ }
+    try { d.exec("ALTER TABLE orders ADD COLUMN request_id TEXT"); } catch { /* exists */ }
     g.__db = d;
     encryptLegacySecrets(d);
   }

@@ -12,7 +12,7 @@ export const GET = handle(async (_: Request, { params }: Ctx) => {
     "SELECT cv.*, c.name, c.phone, c.email, c.tags, c.attrs, c.opted_in FROM conversations cv JOIN contacts c ON c.id=cv.contact_id WHERE cv.id=? AND cv.workspace_id=?", id, s.workspaceId);
   if (!conv) throw new HttpError(404, "Not found");
   run("UPDATE conversations SET unread=0 WHERE id=?", id);
-  const messages = all("SELECT * FROM messages WHERE conversation_id=? ORDER BY created_at ASC LIMIT 500", id);
+  const messages = all("SELECT * FROM messages WHERE conversation_id=? ORDER BY created_at ASC, rowid ASC LIMIT 500", id);
   const agents = all("SELECT id, name FROM users WHERE workspace_id=?", s.workspaceId);
   return json({ conversation: { ...conv, tags: JSON.parse(conv.tags), attrs: JSON.parse(conv.attrs), windowOpen: windowOpen(conv) }, messages, agents });
 });

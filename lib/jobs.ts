@@ -6,6 +6,8 @@ import { all, run } from "./db";
 import * as wa from "./wa";
 import { pushLeadToZoho } from "./zoho";
 import { fetchInboundMedia } from "./media";
+import { answerInbound } from "./ai";
+import { get as sqlGet } from "./db";
 
 type Handler = (payload: any, job: any) => Promise<void> | void;
 
@@ -18,6 +20,7 @@ export const handlers: Record<string, Handler> = {
     if (shouldCancel(p)) return;
     await runStep(p);
   },
+  ai_reply: (p) => { const c = sqlGet<any>("SELECT workspace_id FROM contacts WHERE id=?", p.contactId); return c ? answerInbound(c.workspace_id, p.contactId, p.messageId) : undefined; },
   fetch_media: (p) => fetchInboundMedia(p.messageId),
   zoho_push: (p) => pushLeadToZoho(p.workspaceId, p.contactId),
   flow_step: async (p) => {

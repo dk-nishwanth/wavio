@@ -146,3 +146,34 @@ export async function downloadMedia(c: WaConfig, mediaId: string): Promise<{ byt
   if (!res.ok) throw new WaError(`Media download failed (${res.status})`, res.status < 500 && res.status !== 429);
   return { bytes: Buffer.from(await res.arrayBuffer()), mime: meta.mime_type ?? res.headers.get("content-type") ?? "" };
 }
+
+export type ListSection = { title: string; rows: { id: string; title: string; description?: string }[] };
+
+/** Interactive list: one button that opens a menu of up to 10 rows (e.g. room types). */
+export async function sendList(c: WaConfig, to: string, f: { body: string; button: string; sections: ListSection[]; header?: string; footer?: string }): Promise<string> {
+  if (isMock(c)) return mockSend();
+  const d = await graph(c, `${c.phoneNumberId}/messages`, {
+    messaging_product: "whatsapp", to: toWaNumber(to), type: "interactive",
+    interactive: {
+      type: "list", ...(f.header ? { header: { type: "text", text: f.header.slice(0, 60) } } : {}), body: { text: f.body.slice(0, 1024) }, ...(f.footer ? { footer: { text: f.footer.slice(0, 60) } } : {}),
+      action: { button: f.button.slice(0, 20), sections: f.sections.map((s) => ({ title: s.title.slice(0, 24), rows: s.rows.slice(0, 10).map((r) => ({ id: r.id.slice(0, 200), title: r.title.slice(0, 24), ...(r.description ? { description: r.description.slice(0, 72) } : {}) })) })) },
+    },
+  });
+  return d.messages?.[0]?.id;
+}
+
+export async function sendLocation(c: WaConfig, to: string, l: { latitude: number; longitude: number; name?: string; address?: string }): Promise<string> {
+  if (isMock(c)) return mockSend();
+  const d = await graph(c, `${c.phoneNumberId}/messages`, { messaging_product: "whatsapp", to: toWaNumber(to), type: "location", location: l });
+  return d.messages?.[0]?.id;
+}
+
+/** A message with one tappable button that opens a link (booking page, payment link, brochure). */
+export async function sendCtaUrl(c: WaConfig, to: string, f: { body: string; label: string; url: string; footer?: string }): Promise<string> {
+  if (isMock(c)) return mockSend();
+  const d = await graph(c, `${c.phoneNumberId}/messages`, {
+    messaging_product: "whatsapp", to: toWaNumber(to), type: "interactive",
+    interactive: { type: "cta_url", body: { text: f.body.slice(0, 1024) }, ...(f.footer ? { footer: { text: f.footer.slice(0, 60) } } : {}), action: { name: "cta_url", parameters: { display_text: f.label.slice(0, 20), url: f.url } } },
+  });
+  return d.messages?.[0]?.id;
+}

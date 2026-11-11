@@ -92,7 +92,7 @@ export default function Inbox() {
                   if (m.type === "audio" || m.type === "voice") return <audio src={src} controls style={{ maxWidth: 260 }} />;
                   return <a href={src} className="pill" style={{ margin: 0 }}>📄 {m.media_name || "Document"}</a>;
                 })()}
-                {m.is_note ? "📝 " : ""}{m.body && !/^\[(image|video|audio|document|sticker|voice)\]$/.test(m.body) ? m.body : ""}
+                {m.is_note ? "📝 " : ""}{m.ai ? "🤖 " : ""}{m.body && !/^\[(image|video|audio|document|sticker|voice)\]$/.test(m.body) ? m.body : ""}
                 <small>{m.template_name ? `template · ${m.template_name} · ` : ""}{when(m.created_at)} {m.direction === "out" && !m.is_note ? tick[m.status] : ""}{m.error ? ` — ${m.error}` : ""}</small>
               </div>
             ))}
@@ -126,8 +126,8 @@ export default function Inbox() {
           <div>{c.tags.map((t: string) => <span key={t} className="pill">{t}</span>)}</div>
           <input style={{ marginTop: 6 }} placeholder="Add tag + Enter" onKeyDown={async (e) => { const v = (e.target as HTMLInputElement).value.trim(); if (e.key === "Enter" && v) { await patch({ tags: [...c.tags, v] }); (e.target as HTMLInputElement).value = ""; } }} />
           <label>Bot</label>
-          <button className="btn ghost" onClick={() => patch({ bot_paused: !c.bot_paused })}>{c.bot_paused ? "Resume automations" : "Pause automations"}</button>
-          <p className="small muted">Automations pause automatically when an agent replies.</p>
+          <button className="btn ghost" onClick={() => patch({ bot_paused: !c.bot_paused })}>{c.bot_paused ? "Resume bot" : "Pause bot"}</button>
+          <p className="small muted">The bot (chatbot flows and AI concierge) pauses automatically when a team member replies or the concierge hands over.</p>
           <h2 className="mt">Stays</h2>
           {(stays.data ?? []).map((x) => (
             <div key={x.booking_id} className="card soft" style={{ padding: 10, marginBottom: 8 }}>

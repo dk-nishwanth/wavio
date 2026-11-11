@@ -74,7 +74,7 @@ function touchConversation(convId: string, preview: string, inbound: boolean) {
   );
 }
 
-type QueueOpts = { campaignId?: string; runAt?: number; note?: boolean; manual?: boolean };
+type QueueOpts = { campaignId?: string; runAt?: number; note?: boolean; manual?: boolean; ai?: boolean; userId?: string };
 
 /** Creates the message row and queues delivery. Free-form text is only allowed inside the 24h window. */
 export function queueText(ws: string, contactId: string, text: string, o: QueueOpts = {}) {
@@ -92,8 +92,8 @@ export function queueText(ws: string, contactId: string, text: string, o: QueueO
   if (!contact.opted_in) throw new HttpError(409, "Contact has opted out");
   if (!windowOpen(conv)) throw new HttpError(409, "Outside the 24-hour window — send an approved template instead");
   run(
-    "INSERT INTO messages (id, workspace_id, conversation_id, contact_id, direction, type, body, status, campaign_id, created_at) VALUES (?,?,?,?,?,?,?,?,?,?)",
-    mid, ws, conv.id, contactId, "out", "text", text, "queued", o.campaignId ?? null, now(),
+    "INSERT INTO messages (id, workspace_id, conversation_id, contact_id, direction, type, body, status, campaign_id, ai, sent_by, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+    mid, ws, conv.id, contactId, "out", "text", text, "queued", o.campaignId ?? null, o.ai ? 1 : 0, o.userId ?? null, now(),
   );
   if (o.manual) run("UPDATE conversations SET bot_paused=1 WHERE id=?", conv.id);
   touchConversation(conv.id, text, false);
@@ -136,6 +136,38 @@ export function queueMedia(ws: string, contactId: string, f: { kind: string; pat
   return mid;
 }
 
+function queueInteractive(ws: string, contactId: string, type: string, body: string, params: object, by?: { userId?: string; ai?: boolean }) {
+  const contact = get<Contact>("SELECT * FROM contacts WHERE id=? AND workspace_id=?", contactId, ws);
+  if (!contact) throw new HttpError(404, "Contact not found");
+  if (!contact.opted_in) throw new HttpError(409, "Contact has opted out");
+  const conv = ensureConversation(ws, contactId);
+  if (!windowOpen(conv)) throw Object.assign(new HttpError(409, "Outside the 24-hour window"), { permanent: true });
+  const mid = id("m_");
+  run("INSERT INTO messages (id, workspace_id, conversation_id, contact_id, direction, type, body, params, status, sent_by, ai, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+    mid, ws, conv.id, contactId, "out", type, body, JSON.stringify(params), "queued", by?.userId ?? null, by?.ai ? 1 : 0, now());
+  touchConversation(conv.id, body || `[${type}]`, false);
+  enqueue("send_message", { messageId: mid }, { workspaceId: ws });
+  return mid;
+}
+
+export const queueList = (ws: string, contactId: string, f: { body: string; button: string; sections: wa.ListSection[]; header?: string; footer?: string }, by?: { ai?: boolean }) =>
+  queueInteractive(ws, contactId, "list", f.body, f, by);
+export const queueLocation = (ws: string, contactId: string, l: { latitude: number; longitude: number; name?: string; address?: string }, by?: { ai?: boolean }) =>
+  queueInteractive(ws, contactId, "location", `📍 ${l.name ?? "Location"}${l.address ? ` — ${l.address}` : ""}`, l, by);
+export const queueCtaUrl = (ws: string, contactId: string, f: { body: string; label: string; url: string; footer?: string }, by?: { ai?: boolean }) => {
+  if (!/^https?:\/\//.test(f.url)) throw new HttpError(400, "Link must start with http(s)://");
+  return queueInteractive(ws, contactId, "cta_url", `${f.body}\n${f.url}`, f, by);
+};
+
+/** Sends a library file (room photos, brochure) to a guest. */
+export function queueAsset(ws: string, contactId: string, assetId: string, caption = "", by?: { ai?: boolean }) {
+  const a = get<any>("SELECT * FROM assets WHERE id=? AND workspace_id=?", assetId, ws);
+  if (!a) throw new HttpError(404, "File not found in your library");
+  const mid = queueMedia(ws, contactId, { kind: a.kind, path: a.path, mime: a.mime, name: a.name, caption });
+  if (by?.ai) run("UPDATE messages SET ai=1 WHERE id=?", mid);
+  return mid;
+}
+
 export function queueButtons(ws: string, contactId: string, text: string, buttons: string[]) {
   const conv = ensureConversation(ws, contactId);
   if (!windowOpen(conv)) throw Object.assign(new HttpError(409, "Outside the 24-hour window"), { permanent: true });
@@ -173,6 +205,12 @@ export async function deliverMessage(messageId: string) {
     if (m.type === "template") {
       const tpl = get<any>("SELECT language FROM templates WHERE workspace_id=? AND name=?", m.workspace_id, m.template_name);
       waId = await wa.sendTemplate(cfg, contact.phone, m.template_name, tpl?.language ?? "en", params);
+    } else if (m.type === "list") {
+      waId = await wa.sendList(cfg, contact.phone, params);
+    } else if (m.type === "location") {
+      waId = await wa.sendLocation(cfg, contact.phone, params);
+    } else if (m.type === "cta_url") {
+      waId = await wa.sendCtaUrl(cfg, contact.phone, params);
     } else if (["image", "video", "audio", "document"].includes(m.type)) {
       const { resolveMedia } = await import("./media");
       const bytes = fs.readFileSync(resolveMedia(m.media_path));
@@ -249,8 +287,9 @@ export function receiveInbound(
   resumeWaiting(ws, contact.id, msg.text)
     .then((handled) => {
       if (handled) return;
-      startAutomations(ws, contact.id, "keyword", { text: msg.text });
-      if (firstEver) startAutomations(ws, contact.id, "first_message", { text: msg.text });
+      const started = startAutomations(ws, contact.id, "keyword", { text: msg.text }) + (firstEver ? startAutomations(ws, contact.id, "first_message", { text: msg.text }) : 0);
+      // nothing scripted matched: let the AI concierge answer (it checks it is enabled before doing anything)
+      if (!started && !conv.ai_paused) enqueue("ai_reply", { contactId: contact.id, messageId: mid }, { workspaceId: ws, runAt: now() + 2500 });
     })
     .catch((e) => console.error("flow resume failed", e));
 }
