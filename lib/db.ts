@@ -84,6 +84,12 @@ CREATE TABLE IF NOT EXISTS activities (
   kind TEXT NOT NULL, text TEXT NOT NULL, created_at INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_act_contact ON activities(contact_id, created_at);
+CREATE TABLE IF NOT EXISTS flow_runs (
+  id TEXT PRIMARY KEY, workspace_id TEXT NOT NULL, automation_id TEXT NOT NULL, contact_id TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'running', waiting_node TEXT, vars TEXT NOT NULL DEFAULT '{}',
+  created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_runs_wait ON flow_runs(contact_id, status);
 `;
 
 const g = globalThis as unknown as { __db?: DatabaseSync };
@@ -95,6 +101,7 @@ export function db(): DatabaseSync {
     const d = new DatabaseSync(file);
     d.exec("PRAGMA journal_mode = WAL; PRAGMA busy_timeout = 5000;");
     d.exec(SCHEMA);
+    try { d.exec("ALTER TABLE automations ADD COLUMN graph TEXT"); } catch { /* column already exists */ }
     g.__db = d;
   }
   return g.__db;

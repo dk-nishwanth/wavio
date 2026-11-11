@@ -5,6 +5,7 @@ import { enqueue } from "./queue";
 import * as wa from "./wa";
 import { startAutomations } from "./automation";
 import { touchLead } from "./crm";
+import { resumeWaiting } from "./flow";
 
 export const WINDOW_MS = 24 * 3600 * 1000;
 
@@ -197,8 +198,13 @@ export function receiveInbound(
   }
   if (["start", "subscribe"].includes(t)) run("UPDATE contacts SET opted_in=1 WHERE id=?", contact.id);
   if (conv.bot_paused) return;
-  startAutomations(ws, contact.id, "keyword", { text: msg.text });
-  if (firstEver) startAutomations(ws, contact.id, "first_message", { text: msg.text });
+  resumeWaiting(ws, contact.id, msg.text)
+    .then((handled) => {
+      if (handled) return;
+      startAutomations(ws, contact.id, "keyword", { text: msg.text });
+      if (firstEver) startAutomations(ws, contact.id, "first_message", { text: msg.text });
+    })
+    .catch((e) => console.error("flow resume failed", e));
 }
 
 // ---- outbound webhooks ----

@@ -1,4 +1,5 @@
 "use client";
+import Link from "next/link";
 import { useState } from "react";
 import { api, useApi } from "@/components/api";
 
@@ -19,7 +20,7 @@ export default function Automations() {
   return (
     <>
       <h1>Automations</h1><p className="muted mb">Trigger on a website event, a keyword, or a customer&apos;s first message, then run steps. A <b>wait</b> step with &quot;cancel if event&quot; handles abandoned carts.</p>
-      <div className="row mb wrap"><span className="muted small">Start from:</span>
+      <div className="row mb wrap"><Link href="/automations/flow/new" className="btn">+ New visual flow</Link><span className="muted small">or start a simple one from:</span>
         <button className="btn ghost" onClick={() => preset("order")}>Order confirmation</button><button className="btn ghost" onClick={() => preset("cart")}>Abandoned cart</button><button className="btn ghost" onClick={() => preset("faq")}>Keyword reply</button></div>
       <div className="card mb" style={{ maxWidth: 720 }}>
         <div className="row"><div className="grow"><label>Name</label><input value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} /></div>
@@ -43,7 +44,7 @@ export default function Automations() {
         <button className="btn mt" disabled={!f.steps.length} onClick={async () => { try { await api("/api/automations", "POST", f); setF({ name: "", trigger_type: "event", trigger_value: "", steps: [] }); setMsg(""); reload(); } catch (e: any) { setMsg(e.message); } }}>Save automation</button>
       </div>
       <div className="card" style={{ padding: 0 }}><table><thead><tr><th>Name</th><th>Trigger</th><th>Steps</th><th>Active</th><th /></tr></thead>
-        <tbody>{data?.map((a) => <tr key={a.id}><td>{a.name}</td><td><span className="pill">{a.trigger_type}</span> {a.trigger_value}</td><td className="small">{a.steps.map((s: any) => s.type).join(" → ")}</td>
+        <tbody>{data?.map((a) => <tr key={a.id}><td>{a.graph ? <Link href={`/automations/flow/${a.id}`} style={{ textDecoration: "underline" }}>{a.name}</Link> : a.name}{a.graph && <span className="pill info" style={{ marginLeft: 6 }}>flow</span>}</td><td><span className="pill">{a.trigger_type}</span> {a.trigger_value}</td><td className="small">{a.graph ? `${a.graph.nodes.length - 1} steps` : a.steps.map((s: any) => s.type).join(" → ")}</td>
           <td><input type="checkbox" style={{ width: "auto" }} checked={!!a.active} onChange={async (e) => { await api(`/api/automations/${a.id}`, "PATCH", { active: e.target.checked }); reload(); }} /></td>
           <td><a className="small muted" style={{ cursor: "pointer" }} onClick={async () => { await api(`/api/automations/${a.id}`, "DELETE"); reload(); }}>delete</a></td></tr>)}</tbody></table></div>
     </>

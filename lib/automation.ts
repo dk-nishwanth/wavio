@@ -1,6 +1,7 @@
 import { all, get, now, run } from "./db";
 import { enqueue } from "./queue";
 import { setStage } from "./crm";
+import { startFlow } from "./flow";
 
 export type Step =
   | { type: "send_text"; text: string }
@@ -25,7 +26,8 @@ export function startAutomations(ws: string, contactId: string, type: "event" | 
       const t = (ctx.text ?? "").trim().toLowerCase();
       match = vals.some((v) => t === v || t.includes(v));
     } else match = true;
-    if (match) enqueue("automation_step", { automationId: a.id, contactId, index: 0, startedAt: now(), ctx: { event: ctx.event, text: ctx.text } }, { workspaceId: ws });
+    if (match && a.graph) startFlow(a, contactId, { event: ctx.event, text: ctx.text });
+    else if (match) enqueue("automation_step", { automationId: a.id, contactId, index: 0, startedAt: now(), ctx: { event: ctx.event, text: ctx.text } }, { workspaceId: ws });
   }
 }
 

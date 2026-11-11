@@ -1,5 +1,6 @@
 import { deliverMessage, deliverWebhook, dispatchCampaign } from "./core";
 import { runStep, shouldCancel } from "./automation";
+import { execFlow } from "./flow";
 import { all, run } from "./db";
 import * as wa from "./wa";
 
@@ -14,6 +15,7 @@ export const handlers: Record<string, Handler> = {
     if (shouldCancel(p)) return;
     await runStep(p);
   },
+  flow_step: async (p) => { await execFlow(p.runId, p.nodeId); },
   sync_templates: async (p) => {
     const cfg = wa.waConfig(p.workspaceId);
     for (const t of await wa.fetchTemplateStatuses(cfg)) {
