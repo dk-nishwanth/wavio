@@ -5,6 +5,9 @@ export const GST_RATE = 0.18;
 export const TRIAL_DAYS = 14;
 export const EXTRA_SEAT = 399;
 
+/** Plans are switched off by default: every feature is available. Set ENFORCE_PLANS=1 to turn seat/flow/scheduling limits back on. */
+export const plansEnforced = () => process.env.ENFORCE_PLANS === "1";
+
 export const PLANS = {
   basic: { name: "Basic", price: 1249, seats: 1, flows: 2, scheduler: false, api: false, blurb: "1 user, 2 chatbot flows, inbox and broadcasts" },
   starter: { name: "Starter", price: 2499, seats: 5, flows: Infinity, scheduler: true, api: false, blurb: "5 users, unlimited flows, scheduled broadcasts, lead forms" },
@@ -22,9 +25,14 @@ export function workspacePlan(ws: string): { plan: PlanKey; until: number | null
   return { plan: w.plan, until: w.plan_until, trial: false, active: !w.plan_until || now() < w.plan_until, extraSeats: w.extra_seats ?? 0 };
 }
 
-export const effectivePlan = (ws: string) => { const p = workspacePlan(ws); return p.active ? PLANS[p.plan] : PLANS.basic; };
+export const effectivePlan = (ws: string) => {
+  if (!plansEnforced()) return PLANS.pro;
+  const p = workspacePlan(ws);
+  return p.active ? PLANS[p.plan] : PLANS.basic;
+};
 
 export function assertCan(ws: string, what: "seat" | "flow" | "schedule" | "api") {
+  if (!plansEnforced()) return;
   const p = effectivePlan(ws), w = workspacePlan(ws);
   if (what === "seat" && (get<any>("SELECT COUNT(*) n FROM users WHERE workspace_id=?", ws)!.n as number) >= p.seats + w.extraSeats)
     throw new HttpError(402, `Your ${p.name} plan includes ${p.seats + w.extraSeats} user(s). Upgrade or add seats in Billing.`);

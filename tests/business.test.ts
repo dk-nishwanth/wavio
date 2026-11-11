@@ -89,6 +89,20 @@ describe("billing and plan limits", () => {
   });
 });
 
+describe("plans switched off (the default)", () => {
+  it("lets everything through when ENFORCE_PLANS is not set", () => {
+    const saved = process.env.ENFORCE_PLANS;
+    delete process.env.ENFORCE_PLANS;
+    try {
+      expect(() => assertCan(ws, "seat")).not.toThrow();
+      expect(() => assertCan(ws, "flow")).not.toThrow();
+      expect(() => assertCan(ws, "schedule")).not.toThrow();
+      expect(() => assertCan(ws, "api")).not.toThrow();
+      expect(effectivePlan(ws).name).toBe("Pro");
+    } finally { process.env.ENFORCE_PLANS = saved; }
+  });
+});
+
 describe("resort stay journey", () => {
   const stayDates = () => ({ in: addDays(isoToday(), 10), out: addDays(isoToday(), 12) });
   it("records a stay, sends the confirmation and schedules a reminder", async () => {

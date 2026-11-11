@@ -27,6 +27,7 @@ Settings → paste Phone number ID, WABA ID, access token and app secret → **C
 | `MEDIA_DIR` | Where attachments are stored (default next to the database). |
 | `ALLOW_DEV_TOOLS=1` | Re-enables simulators / test checkout in production. Leave unset. |
 | `INLINE_WORKER=0` | Disable the in-server job loop (run `npm run worker` instead). |
+| `ENFORCE_PLANS=1` | Plans/limits are **off by default** (every feature is available, Billing is hidden). Set to 1 to enforce seat, flow and scheduling limits. |
 | `PLATFORM_RAZORPAY_*`, `SELLER_*` | Your own billing gateway and GST invoice seller details. |
 
 In production the server refuses to start with placeholder secrets.

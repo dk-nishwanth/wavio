@@ -25,7 +25,7 @@ const groups: { title: string; links: [string, string, keyof typeof I][] }[] = [
   { title: "Build", links: [["/team", "Team", "users"], ["/billing", "Billing", "card"], ["/developers", "Developers", "code"], ["/settings", "Settings", "cog"]] },
 ];
 
-export default function Nav({ name, terms }: { name: string; terms: { catalog: string; orders: string } }) {
+export default function Nav({ name, terms, showBilling = false }: { name: string; terms: { catalog: string; orders: string }; showBilling?: boolean }) {
   const label = (l: string) => (l === "Catalog" ? terms.catalog : l === "Orders" ? terms.orders : l);
   const path = usePathname();
   const [unread, setUnread] = useState(0);
@@ -56,7 +56,7 @@ export default function Nav({ name, terms }: { name: string; terms: { catalog: s
       {groups.map((g) => (
         <div key={g.title}>
           <div className="grp">{g.title}</div>
-          {g.links.map(([href, l, icon]) => (
+          {g.links.filter(([href]) => showBilling || href !== "/billing").map(([href, l, icon]) => (
             <Link key={href} href={href} className={"nav" + (path.startsWith(href) ? " on" : "")}>
               <svg viewBox="0 0 24 24">{I[icon]}</svg>{label(l)}{href === "/inbox" && unread > 0 && <span className="dot" style={{ marginLeft: "auto" }}>{unread}</span>}
             </Link>
