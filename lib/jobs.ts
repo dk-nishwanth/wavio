@@ -3,6 +3,7 @@ import { runStep, shouldCancel } from "./automation";
 import { execFlow } from "./flow";
 import { all, run } from "./db";
 import * as wa from "./wa";
+import { pushLeadToZoho } from "./zoho";
 
 type Handler = (payload: any, job: any) => Promise<void> | void;
 
@@ -15,6 +16,7 @@ export const handlers: Record<string, Handler> = {
     if (shouldCancel(p)) return;
     await runStep(p);
   },
+  zoho_push: (p) => pushLeadToZoho(p.workspaceId, p.contactId),
   flow_step: async (p) => { await execFlow(p.runId, p.nodeId); },
   sync_templates: async (p) => {
     const cfg = wa.waConfig(p.workspaceId);

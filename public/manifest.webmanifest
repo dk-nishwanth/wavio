@@ -1,0 +1,13 @@
+{
+  "name": "Wavio",
+  "short_name": "Wavio",
+  "description": "WhatsApp inbox, broadcasts and automation",
+  "start_url": "/inbox",
+  "display": "standalone",
+  "background_color": "#fafaf8",
+  "theme_color": "#063b26",
+  "icons": [
+    { "src": "/logo-mark.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "/logo-mark.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "maskable" }
+  ]
+}

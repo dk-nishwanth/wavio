@@ -12,6 +12,7 @@ const I = {
   target: (<><circle cx="12" cy="12" r="9" /><circle cx="12" cy="12" r="5" /><circle cx="12" cy="12" r="1" /></>),
   bag: (<><path d="M5 8h14l-1 12H6z" /><path d="M9 8V6a3 3 0 0 1 6 0v2" /></>),
   receipt: (<><path d="M6 3h12v18l-3-2-3 2-3-2-3 2z" /><path d="M9 8h6M9 12h6" /></>),
+  card: (<><rect x="2.5" y="5" width="19" height="14" rx="2" /><path d="M2.5 10h19" /></>),
   zap: <path d="M13 2 4 14h7l-1 8 9-12h-7z" />,
   code: <path d="m16 18 6-6-6-6M8 6l-6 6 6 6" />,
   cog: (<><circle cx="12" cy="12" r="3" /><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M19.1 4.9 17 7M7 17l-2.1 2.1" /></>),
@@ -20,7 +21,7 @@ const I = {
 const groups: { title: string; links: [string, string, keyof typeof I][] }[] = [
   { title: "Engage", links: [["/home", "Home", "home"], ["/inbox", "Inbox", "inbox"], ["/contacts", "Contacts", "users"], ["/leads", "Leads", "target"]] },
   { title: "Grow", links: [["/templates", "Templates", "file"], ["/catalog", "Catalog", "bag"], ["/orders", "Orders", "receipt"], ["/campaigns", "Broadcasts", "send"], ["/automations", "Automations", "zap"]] },
-  { title: "Build", links: [["/developers", "Developers", "code"], ["/settings", "Settings", "cog"]] },
+  { title: "Build", links: [["/team", "Team", "users"], ["/billing", "Billing", "card"], ["/developers", "Developers", "code"], ["/settings", "Settings", "cog"]] },
 ];
 
 export default function Nav({ name }: { name: string }) {

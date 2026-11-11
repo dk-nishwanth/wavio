@@ -13,6 +13,7 @@ const META: Record<string, { label: string; color: string; ports?: (d: any) => {
   send_template: { label: "Send template", color: "#0f9d58" },
   buttons: { label: "Ask with buttons", color: "#2563eb", ports: (d) => [...(d.buttons ?? []).map((b: string, i: number) => ({ id: String(i), label: b || `Button ${i + 1}` })), { id: "other", label: "Anything else" }] },
   ask: { label: "Ask a question", color: "#2563eb" },
+  send_flow: { label: "WhatsApp Flow form", color: "#0891b2" },
   wait: { label: "Wait", color: "#d97706" },
   condition: { label: "Condition", color: "#7c3aed", ports: () => [{ id: "yes", label: "Yes" }, { id: "no", label: "No" }] },
   tag: { label: "Add tag", color: "#475569" },
@@ -28,6 +29,7 @@ const summary = (n: N) => {
   const d = n.data;
   switch (n.type) {
     case "trigger": return d.trigger_type === "first_message" ? "First message from a contact" : `${d.trigger_type === "event" ? "Event" : "Keyword"}: ${d.trigger_value || "—"}`;
+    case "send_flow": return d.flow_id ? `Flow ${d.flow_id}` : "Enter a Flow ID";
     case "send_text": case "buttons": case "ask": return d.text || "Empty message";
     case "send_template": return d.template || "Choose a template";
     case "wait": return `${d.minutes ?? 0} minutes`;
@@ -77,7 +79,7 @@ export default function FlowEditor({ params }: { params: Promise<{ id: string }>
   const setData = (patch: object) => setNodes((ns) => ns.map((n) => (n.id === sel ? { ...n, data: { ...n.data, ...patch } } : n)));
   const defaults: Record<string, any> = {
     send_text: { text: "" }, send_template: { template: "", params: [] }, buttons: { text: "Choose an option:", buttons: ["Yes", "No"] }, ask: { text: "What's your email?", variable: "email", save_to_contact: true },
-    wait: { minutes: 60 }, condition: { field: "tag", value: "", op: "eq", key: "" }, tag: { tag: "" }, set_stage: { stage: "contacted" }, handoff: {}, http: { url: "" },
+    send_flow: { text: "Please fill in this form", flow_id: "", cta: "Open form", screen: "" }, wait: { minutes: 60 }, condition: { field: "tag", value: "", op: "eq", key: "" }, tag: { tag: "" }, set_stage: { stage: "contacted" }, handoff: {}, http: { url: "" },
   };
   function add(type: string) {
     const max = nodes.reduce((m, n) => Math.max(m, n.y + height(n)), 0);
@@ -176,6 +178,11 @@ export default function FlowEditor({ params }: { params: Promise<{ id: string }>
               <label className="row"><input type="checkbox" checked={!!node.data.save_to_contact} onChange={(e) => setData({ save_to_contact: e.target.checked })} /> Also save on the contact</label></>)}
             {node.type === "send_template" && (<><label>Template</label><select value={node.data.template ?? ""} onChange={(e) => setData({ template: e.target.value })}><option value="">Choose…</option>{approved.map((t) => <option key={t.id}>{t.name}</option>)}</select>
               <label>Variables (one per line)</label><textarea rows={3} value={(node.data.params ?? []).join("\n")} onChange={(e) => setData({ params: e.target.value.split("\n") })} /></>)}
+            {node.type === "send_flow" && (<><label>Message</label><textarea rows={2} value={node.data.text ?? ""} onChange={(e) => setData({ text: e.target.value })} />
+              <label>Flow ID (from WhatsApp Manager → Flows)</label><input value={node.data.flow_id ?? ""} onChange={(e) => setData({ flow_id: e.target.value })} />
+              <label>Button text</label><input value={node.data.cta ?? ""} onChange={(e) => setData({ cta: e.target.value })} />
+              <label>First screen ID (optional)</label><input value={node.data.screen ?? ""} onChange={(e) => setData({ screen: e.target.value })} />
+              <p className="muted small">Answers are saved on the contact and fire the <code>flow_completed</code> event.</p></>)}
             {node.type === "wait" && (<><label>Wait (minutes)</label><input type="number" value={node.data.minutes ?? 0} onChange={(e) => setData({ minutes: Number(e.target.value) })} /></>)}
             {node.type === "condition" && (<><label>Check</label><select value={node.data.field} onChange={(e) => setData({ field: e.target.value })}><option value="tag">Contact has tag</option><option value="attr">Contact attribute</option><option value="var">Answer saved earlier</option><option value="stage">Lead stage</option></select>
               {["attr", "var"].includes(node.data.field) && (<><label>Name</label><input value={node.data.key ?? ""} onChange={(e) => setData({ key: e.target.value })} /></>)}

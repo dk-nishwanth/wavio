@@ -88,3 +88,16 @@ export async function fetchTemplateStatuses(c: WaConfig): Promise<{ name: string
   const d = await graph(c, `${c.wabaId}/message_templates?fields=name,language,status&limit=200`);
   return d.data ?? [];
 }
+
+/** Sends a Meta WhatsApp Flow (an in-chat form) published in your WhatsApp Manager. */
+export async function sendFlow(c: WaConfig, to: string, f: { text: string; flowId: string; cta: string; screen?: string; token: string }): Promise<string> {
+  if (isMock(c)) return "mock_" + Math.random().toString(36).slice(2);
+  const d = await graph(c, `${c.phoneNumberId}/messages`, {
+    messaging_product: "whatsapp", to: toWaNumber(to), type: "interactive",
+    interactive: {
+      type: "flow", body: { text: f.text },
+      action: { name: "flow", parameters: { flow_message_version: "3", flow_token: f.token, flow_id: f.flowId, flow_cta: f.cta.slice(0, 30), flow_action: "navigate", ...(f.screen ? { flow_action_payload: { screen: f.screen } } : {}) } },
+    },
+  });
+  return d.messages?.[0]?.id;
+}

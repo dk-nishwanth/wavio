@@ -41,6 +41,17 @@ curl -X POST ${base}/api/v1/events -H "Authorization: Bearer sk_live_..." -H "Co
 # send an approved template directly (secret key only)
 curl -X POST ${base}/api/v1/messages/template -H "Authorization: Bearer sk_live_..." -H "Content-Type: application/json" \\
   -d '{"phone":"919876543210","template":"order_shipped","params":["Asha","#1042"],"optIn":true}'`}</pre>
+      <h2 className="mt">Gmail (Google Apps Script)</h2>
+      <pre>{`function onNewLead(e) {            // run from a Form-submit or time-driven trigger
+  UrlFetchApp.fetch("${base}/api/v1/events", {
+    method: "post", contentType: "application/json",
+    headers: { Authorization: "Bearer sk_live_..." },
+    payload: JSON.stringify({ event: "email_lead", phone: "919876543210", name: "Asha", optIn: true,
+                              properties: { subject: "Pricing question" } })
+  });
+}`}</pre>
+      <h2 className="mt">Zoom</h2>
+      <p className="muted small">Point a Zoom webhook (e.g. meeting.ended, webinar.registration_created) at a small function on your server that calls <code>POST /api/v1/events</code> with the secret key, event <code>zoom_meeting_ended</code> and the attendee&apos;s phone. Automations can then send a follow-up.</p>
       <p className="muted small">Try it live: <a href="/demo" style={{ textDecoration: "underline" }}>/demo</a>.</p>
     </>
   );

@@ -1,4 +1,5 @@
 import { all, get, id, now, run } from "./db";
+import { enqueue } from "./queue";
 
 export const STAGES = [
   { key: "new", label: "New" },
@@ -47,6 +48,7 @@ export function touchLead(ws: string, contactId: string, source = "whatsapp") {
     const lid = id("ld_");
     run("INSERT INTO leads (id, workspace_id, contact_id, stage, score, source, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?)", lid, ws, contactId, "new", 0, source, now(), now());
     logActivity(ws, contactId, "lead", `Lead created from ${source}`);
+    enqueue("zoho_push", { workspaceId: ws, contactId }, { workspaceId: ws });
     lead = get<any>("SELECT * FROM leads WHERE id=?", lid);
   }
   const score = computeScore(ws, contactId);

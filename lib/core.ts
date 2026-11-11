@@ -4,8 +4,9 @@ import { HttpError } from "./auth";
 import { enqueue } from "./queue";
 import * as wa from "./wa";
 import { startAutomations } from "./automation";
-import { touchLead } from "./crm";
+import { touchLead, logActivity } from "./crm";
 import { resumeWaiting } from "./flow";
+import { ingestEvent } from "./events";
 
 export const WINDOW_MS = 24 * 3600 * 1000;
 
@@ -131,6 +132,17 @@ export function queueButtons(ws: string, contactId: string, text: string, button
   return mid;
 }
 
+export function queueFlow(ws: string, contactId: string, f: { text: string; flowId: string; cta: string; screen?: string }) {
+  const conv = ensureConversation(ws, contactId);
+  if (!windowOpen(conv)) throw Object.assign(new HttpError(409, "Outside the 24-hour window"), { permanent: true });
+  const mid = id("m_");
+  run("INSERT INTO messages (id, workspace_id, conversation_id, contact_id, direction, type, body, params, status, created_at) VALUES (?,?,?,?,?,?,?,?,?,?)",
+    mid, ws, conv.id, contactId, "out", "flow", f.text, JSON.stringify(f), "queued", now());
+  touchConversation(conv.id, f.text, false);
+  enqueue("send_message", { messageId: mid }, { workspaceId: ws });
+  return mid;
+}
+
 /** Job handler: actually calls WhatsApp. */
 export async function deliverMessage(messageId: string) {
   const m = get<any>("SELECT * FROM messages WHERE id=?", messageId);
@@ -144,6 +156,8 @@ export async function deliverMessage(messageId: string) {
     if (m.type === "template") {
       const tpl = get<any>("SELECT language FROM templates WHERE workspace_id=? AND name=?", m.workspace_id, m.template_name);
       waId = await wa.sendTemplate(cfg, contact.phone, m.template_name, tpl?.language ?? "en", params);
+    } else if (m.type === "flow") {
+      waId = await wa.sendFlow(cfg, contact.phone, { text: m.body, flowId: params.flowId, cta: params.cta || "Open", screen: params.screen, token: m.id });
     } else if (m.type === "buttons") {
       waId = await wa.sendInteractiveButtons(cfg, contact.phone, m.body, params);
     } else {
@@ -173,7 +187,7 @@ export function applyStatus(waId: string, status: string, error?: string) {
 export function receiveInbound(
   ws: string,
   from: { phone: string; name?: string },
-  msg: { waId?: string; type: string; text: string },
+  msg: { waId?: string; type: string; text: string; flowResponse?: Record<string, any>; referral?: { headline?: string; source_url?: string; source_id?: string } },
 ) {
   if (msg.waId && get("SELECT 1 FROM messages WHERE wa_message_id=?", msg.waId)) return; // Meta retries webhooks
   const isNew = !get("SELECT 1 FROM contacts WHERE workspace_id=? AND phone=?", ws, normalizePhone(from.phone));
@@ -188,7 +202,18 @@ export function receiveInbound(
     mid, ws, conv.id, contact.id, "in", msg.type, msg.text, msg.waId ?? null, "received", now(),
   );
   touchConversation(conv.id, msg.text, true);
-  touchLead(ws, contact.id, "whatsapp");
+  touchLead(ws, contact.id, msg.referral ? "click_to_whatsapp_ad" : "whatsapp");
+  if (msg.referral) {
+    const tags = [...new Set([...JSON.parse(contact.tags), "ctwa"])];
+    run("UPDATE contacts SET tags=?, attrs=? WHERE id=?", JSON.stringify(tags), JSON.stringify({ ...JSON.parse(contact.attrs), ad_headline: msg.referral.headline ?? "", ad_id: msg.referral.source_id ?? "" }), contact.id);
+    logActivity(ws, contact.id, "ad", `Came from a click-to-WhatsApp ad${msg.referral.headline ? `: ${msg.referral.headline}` : ""}`);
+  }
+  if (msg.flowResponse) {
+    const { flow_token: _t, ...answers } = msg.flowResponse;
+    run("UPDATE contacts SET attrs=? WHERE id=?", JSON.stringify({ ...JSON.parse(contact.attrs), ...answers }), contact.id);
+    logActivity(ws, contact.id, "flow", `Completed a WhatsApp Flow: ${Object.keys(answers).join(", ")}`);
+    ingestEvent(ws, { name: "flow_completed", phone: contact.phone, payload: answers });
+  }
   emitWebhook(ws, "message.received", { messageId: mid, contactId: contact.id, phone: contact.phone, text: msg.text });
 
   const t = msg.text.trim().toLowerCase();

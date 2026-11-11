@@ -22,6 +22,8 @@ export default function Settings() {
         <button className="btn mt" onClick={async () => { await api("/api/settings", "PUT", f); setF({ phoneNumberId: "", wabaId: "", token: "", appSecret: "" }); setMsg("Saved"); reload(); }}>Save</button> <span className="muted">{msg}</span>
       </div>
       {data && <PaymentsCard data={data.payments} reload={reload} />}
+      {data && <MetaCard data={data.meta} reload={reload} />}
+      {data && <IntegrationsCard data={data.integrations} reload={reload} />}
       {data && <div className="card mt" style={{ maxWidth: 620 }}>
         <h2>Webhook (paste into Meta → WhatsApp → Configuration)</h2>
         <label>Callback URL (must be public HTTPS — use a tunnel like ngrok while developing)</label><input readOnly value={data.webhookUrl} onFocus={(e) => e.target.select()} />
@@ -51,6 +53,46 @@ function PaymentsCard({ data, reload }: { data: any; reload: () => void }) {
       <label>Salt {data.hasPayuSalt && <span className="pill ok">saved</span>}</label><input type="password" value={f.payu_salt ?? ""} onChange={set("payu_salt")} />
       <label>Mode</label><select value={f.payu_mode ?? data.payuMode} onChange={set("payu_mode")}><option value="test">Test</option><option value="live">Live</option></select>
       <div className="row mt"><button className="btn" onClick={() => save()}>Save payment settings</button><span className="muted">{msg}</span></div>
+    </div>
+  );
+}
+
+function MetaCard({ data, reload }: { data: any; reload: () => void }) {
+  const [token, setToken] = useState(""); const [t, setT] = useState({ name: "", phone: "" }); const [msg, setMsg] = useState("");
+  return (
+    <div className="card mt" style={{ maxWidth: 620 }}>
+      <h2>Ads &amp; lead forms</h2>
+      <p className="muted small">Click-to-WhatsApp ads need nothing extra: chats that start from an ad are tagged <code>ctwa</code> automatically. For Facebook/Instagram Lead Forms, add the webhook below to your Meta app (Page → field <code>leadgen</code>) and save a Page access token.</p>
+      <label>Leads webhook URL (verify token is the same as WhatsApp)</label><input readOnly value={data.leadsWebhookUrl} onFocus={(e) => e.target.select()} />
+      <label>Page access token {data.hasPageToken && <span className="pill ok">saved</span>}</label>
+      <div className="row"><input type="password" value={token} onChange={(e) => setToken(e.target.value)} /><button className="btn" onClick={async () => { await api("/api/settings", "PUT", { metaPageToken: token }); setToken(""); reload(); }}>Save</button></div>
+      <h2 style={{ marginTop: 16 }}>Try it without an ad</h2>
+      <div className="row"><input placeholder="Name" value={t.name} onChange={(e) => setT({ ...t, name: e.target.value })} /><input placeholder="Phone" value={t.phone} onChange={(e) => setT({ ...t, phone: e.target.value })} />
+        <button className="btn ghost" onClick={async () => { try { await api("/api/dev/lead", "POST", t); setMsg("Lead created — see Leads"); } catch (e: any) { setMsg(e.message); } }}>Simulate lead form</button></div>
+      <p className="muted small">{msg}</p>
+    </div>
+  );
+}
+
+function IntegrationsCard({ data, reload }: { data: any; reload: () => void }) {
+  const [cal, setCal] = useState(""); const [z, setZ] = useState({ client_id: "", client_secret: "", refresh_token: "", region: data.zohoRegion });
+  return (
+    <div className="card mt" style={{ maxWidth: 620 }}>
+      <h2>Integrations</h2>
+      <h2 style={{ marginTop: 10 }}>Cal.com</h2>
+      <p className="muted small">In Cal.com → Settings → Developer → Webhooks, add this URL with a secret, for booking created / rescheduled / cancelled. Bookings become events (<code>booking_created</code>…) that automations can listen to, e.g. a reminder 1 day before.</p>
+      <label>Webhook URL</label><input readOnly value={data.calUrl} onFocus={(e) => e.target.select()} />
+      <label>Webhook secret {data.hasCalSecret && <span className="pill ok">saved</span>}</label>
+      <div className="row"><input type="password" value={cal} onChange={(e) => setCal(e.target.value)} /><button className="btn" onClick={async () => { await api("/api/settings", "PUT", { calcomSecret: cal }); setCal(""); reload(); }}>Save</button></div>
+      <h2 style={{ marginTop: 16 }}>Zoho CRM {data.zohoConnected && <span className="pill ok">connected</span>}</h2>
+      <p className="muted small">New leads are pushed to Zoho CRM as Leads. Create a Self Client in the Zoho API Console (scope <code>ZohoCRM.modules.leads.CREATE</code>) and paste its credentials and refresh token.</p>
+      <div className="row"><input placeholder="Client ID" value={z.client_id} onChange={(e) => setZ({ ...z, client_id: e.target.value })} /><input type="password" placeholder="Client secret" value={z.client_secret} onChange={(e) => setZ({ ...z, client_secret: e.target.value })} /></div>
+      <div className="row mt"><input type="password" placeholder="Refresh token" value={z.refresh_token} onChange={(e) => setZ({ ...z, refresh_token: e.target.value })} />
+        <select style={{ width: 90 }} value={z.region} onChange={(e) => setZ({ ...z, region: e.target.value })}><option value="in">.in</option><option value="com">.com</option><option value="eu">.eu</option><option value="com.au">.com.au</option></select></div>
+      <div className="row mt"><button className="btn" disabled={!z.client_id || !z.client_secret || !z.refresh_token} onClick={async () => { await api("/api/settings", "PUT", { zoho: z }); setZ({ ...z, client_id: "", client_secret: "", refresh_token: "" }); reload(); }}>Connect Zoho</button>
+        {data.zohoConnected && <button className="btn ghost" onClick={async () => { await api("/api/settings", "PUT", { disconnectZoho: true }); reload(); }}>Disconnect</button>}</div>
+      <h2 style={{ marginTop: 16 }}>Gmail &amp; Zoom</h2>
+      <p className="muted small">Both work through the Events API in Developers: a Google Apps Script (Gmail) or a Zoom webhook relay posts <code>{"{ event, phone, properties }"}</code> to <code>/api/v1/events</code> with your secret key. Example snippets are on the Developers page.</p>
     </div>
   );
 }

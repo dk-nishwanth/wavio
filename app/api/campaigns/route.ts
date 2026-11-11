@@ -1,5 +1,6 @@
 import { all, get, id, now, run } from "@/lib/db";
 import { requireSession } from "@/lib/auth";
+import { assertCan } from "@/lib/billing";
 import { handle, json } from "@/lib/http";
 import { enqueue } from "@/lib/queue";
 
@@ -24,6 +25,7 @@ export const POST = handle(async (req: Request) => {
   const cid = id("cmp_");
   const when = b.scheduledAt ? new Date(b.scheduledAt).getTime() : null;
   const later = when && when > now() + 30_000;
+  if (later) assertCan(s.workspaceId, "schedule");
   run("INSERT INTO campaigns (id, workspace_id, name, template_id, segment_tag, status, scheduled_at, created_at) VALUES (?,?,?,?,?,?,?,?)",
     cid, s.workspaceId, b.name || "Untitled campaign", tpl.id, b.segmentTag || null, later ? "scheduled" : "sending", later ? when : null, now());
   if (!later) enqueue("campaign_dispatch", { campaignId: cid }, { workspaceId: s.workspaceId });

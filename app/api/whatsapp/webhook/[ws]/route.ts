@@ -33,8 +33,11 @@ export const POST = handle(async (req: Request, { params }: Ctx) => {
       const names: Record<string, string> = {};
       for (const c of v.contacts ?? []) names[c.wa_id] = c.profile?.name;
       for (const m of v.messages ?? []) {
-        const text = m.text?.body ?? m.button?.text ?? m.interactive?.button_reply?.title ?? m.interactive?.list_reply?.title ?? `[${m.type}]`;
-        receiveInbound(ws, { phone: m.from, name: names[m.from] }, { waId: m.id, type: m.type, text });
+        const nfm = m.interactive?.nfm_reply;
+        let flowResponse: Record<string, any> | undefined;
+        if (nfm?.response_json) { try { flowResponse = JSON.parse(nfm.response_json); } catch { /* ignore malformed */ } }
+        const text = nfm ? "Submitted a form" : m.text?.body ?? m.button?.text ?? m.interactive?.button_reply?.title ?? m.interactive?.list_reply?.title ?? `[${m.type}]`;
+        receiveInbound(ws, { phone: m.from, name: names[m.from] }, { waId: m.id, type: m.type, text, referral: m.referral, flowResponse });
       }
       for (const s of v.statuses ?? []) applyStatus(s.id, s.status, s.errors?.[0]?.title);
     }

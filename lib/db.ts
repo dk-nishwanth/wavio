@@ -101,6 +101,12 @@ CREATE TABLE IF NOT EXISTS orders (
   created_at INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_orders_ws ON orders(workspace_id, created_at);
+CREATE TABLE IF NOT EXISTS invoices (
+  id TEXT PRIMARY KEY, workspace_id TEXT NOT NULL, number TEXT NOT NULL, plan TEXT NOT NULL, period TEXT NOT NULL,
+  extra_seats INTEGER NOT NULL DEFAULT 0, base REAL NOT NULL, gst REAL NOT NULL, total REAL NOT NULL,
+  status TEXT NOT NULL DEFAULT 'pending', payment_link TEXT, payment_ref TEXT, buyer TEXT NOT NULL DEFAULT '{}',
+  created_at INTEGER NOT NULL, paid_at INTEGER
+);
 `;
 
 const g = globalThis as unknown as { __db?: DatabaseSync };
@@ -114,6 +120,11 @@ export function db(): DatabaseSync {
     d.exec(SCHEMA);
     try { d.exec("ALTER TABLE automations ADD COLUMN graph TEXT"); } catch { /* column already exists */ }
     try { d.exec("ALTER TABLE workspaces ADD COLUMN pay_json TEXT"); } catch { /* column already exists */ }
+    try { d.exec("ALTER TABLE workspaces ADD COLUMN meta_json TEXT"); } catch { /* column already exists */ }
+    try { d.exec("ALTER TABLE workspaces ADD COLUMN plan TEXT"); } catch { /* column already exists */ }
+    try { d.exec("ALTER TABLE workspaces ADD COLUMN plan_until INTEGER"); } catch { /* column already exists */ }
+    try { d.exec("ALTER TABLE workspaces ADD COLUMN extra_seats INTEGER NOT NULL DEFAULT 0"); } catch { /* column already exists */ }
+    try { d.exec("ALTER TABLE workspaces ADD COLUMN billing_json TEXT"); } catch { /* column already exists */ }
     g.__db = d;
   }
   return g.__db;

@@ -42,7 +42,7 @@ function condition(d: any, contact: any, vars: any) {
 
 /** Executes nodes until the flow must wait (buttons, question, delay) or ends. */
 export async function execFlow(runId: string, nodeId: string | null) {
-  const { queueText, queueTemplate, queueButtons } = await import("./core");
+  const { queueText, queueTemplate, queueButtons, queueFlow } = await import("./core");
   const r = get<any>("SELECT * FROM flow_runs WHERE id=?", runId);
   if (!r || r.status === "done" || r.status === "failed") return;
   const a = get<any>("SELECT * FROM automations WHERE id=?", r.automation_id);
@@ -63,6 +63,7 @@ export async function execFlow(runId: string, nodeId: string | null) {
       switch (n.type) {
         case "send_text": queueText(ws, c.id, render(d.text, c, vars)); cur = next(g, n.id); break;
         case "send_template": queueTemplate(ws, c.id, d.template, (d.params ?? []).map((p: string) => render(p, c, vars))); cur = next(g, n.id); break;
+        case "send_flow": queueFlow(ws, c.id, { text: render(d.text, c, vars), flowId: d.flow_id, cta: d.cta || "Open", screen: d.screen || undefined }); cur = next(g, n.id); break;
         case "buttons":
           queueButtons(ws, c.id, render(d.text, c, vars), d.buttons ?? []);
           run("UPDATE flow_runs SET status='waiting', waiting_node=?, updated_at=? WHERE id=?", n.id, now(), runId);
