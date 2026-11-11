@@ -90,6 +90,17 @@ CREATE TABLE IF NOT EXISTS flow_runs (
   created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_runs_wait ON flow_runs(contact_id, status);
+CREATE TABLE IF NOT EXISTS products (
+  id TEXT PRIMARY KEY, workspace_id TEXT NOT NULL, name TEXT NOT NULL, description TEXT, price REAL NOT NULL DEFAULT 0,
+  currency TEXT NOT NULL DEFAULT 'INR', image_url TEXT, sku TEXT, active INTEGER NOT NULL DEFAULT 1, created_at INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS orders (
+  id TEXT PRIMARY KEY, workspace_id TEXT NOT NULL, number INTEGER NOT NULL, contact_id TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'pending', total REAL NOT NULL DEFAULT 0, currency TEXT NOT NULL DEFAULT 'INR',
+  items TEXT NOT NULL DEFAULT '[]', provider TEXT, payment_link TEXT, payment_ref TEXT, paid_at INTEGER,
+  created_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_orders_ws ON orders(workspace_id, created_at);
 `;
 
 const g = globalThis as unknown as { __db?: DatabaseSync };
@@ -102,6 +113,7 @@ export function db(): DatabaseSync {
     d.exec("PRAGMA journal_mode = WAL; PRAGMA busy_timeout = 5000;");
     d.exec(SCHEMA);
     try { d.exec("ALTER TABLE automations ADD COLUMN graph TEXT"); } catch { /* column already exists */ }
+    try { d.exec("ALTER TABLE workspaces ADD COLUMN pay_json TEXT"); } catch { /* column already exists */ }
     g.__db = d;
   }
   return g.__db;
