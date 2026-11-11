@@ -24,12 +24,13 @@ export default function Home() {
   const tpls = useApi<any[]>("/api/templates");
   const autos = useApi<any[]>("/api/automations");
   const convs = useApi<any[]>("/api/conversations?filter=all", 5000);
+  const stays = useApi<any[]>("/api/stays", 10000);
   const s = stats.data;
   const steps = [
     { done: settings.data ? !settings.data.mock : false, title: "Connect WhatsApp", body: "Add your Cloud API credentials, or keep using test mode.", href: "/settings" },
     { done: (tpls.data?.length ?? 0) > 0, title: "Create a message template", body: "Templates let you message customers outside the 24-hour window.", href: "/templates" },
     { done: (s?.contacts ?? 0) > 0, title: "Add your contacts", body: "Import a CSV of opted-in customers.", href: "/contacts" },
-    { done: (autos.data?.length ?? 0) > 0, title: "Build an automation", body: "Reply to keywords, confirm orders, recover abandoned carts.", href: "/automations" },
+    { done: (autos.data?.length ?? 0) > 0, title: "Set up automations", body: "Install the resort starter pack, or build your own chatbot flow.", href: "/automations" },
     { done: false, title: "Connect your website", body: "Install the React SDK and send events from your site.", href: "/developers" },
   ];
   const doneCount = steps.filter((x) => x.done).length;
@@ -46,6 +47,22 @@ export default function Home() {
         <Stat icon="send" label="Messages sent (7d)" value={s?.sent7d ?? "–"} />
         <Stat icon="alert" label="Failed (7d)" value={s?.failed7d ?? "–"} />
       </div>
+
+      {(stays.data?.length ?? 0) > 0 && (() => {
+        const live = (stays.data ?? []).filter((x) => x.status === "upcoming" || x.status === "in_house").sort((a, b) => a.check_in_date.localeCompare(b.check_in_date));
+        return (
+          <div className="card mb">
+            <div className="row between"><h2>Upcoming stays</h2><span className="chip">{live.filter((x) => x.days_to_arrival === 0 || x.status === "in_house").length} arriving or in-house today</span></div>
+            {live.slice(0, 6).map((x) => (
+              <div key={x.booking_id} className="check" style={{ alignItems: "center" }}>
+                <span className="avatar">{(x.name || "#").slice(0, 1).toUpperCase()}</span>
+                <div className="grow"><b style={{ fontWeight: 500 }}>{x.name || "+" + x.phone}</b><div className="muted small">{x.check_in} → {x.check_out} · {x.guests} guests {x.room && `· ${x.room}`}</div></div>
+                <span className={"pill " + (x.status === "in_house" ? "ok" : x.days_to_arrival <= 2 ? "warn" : "")}>{x.status === "in_house" ? "In house" : x.days_to_arrival === 0 ? "Arriving today" : `In ${x.days_to_arrival} days`}</span>
+              </div>))}
+            {live.length === 0 && <p className="muted">No upcoming stays.</p>}
+          </div>
+        );
+      })()}
 
       <div className="grid" style={{ gridTemplateColumns: "minmax(0,3fr) minmax(0,2fr)" }}>
         <div className="card">

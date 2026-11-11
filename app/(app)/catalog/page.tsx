@@ -8,7 +8,7 @@ export default function Catalog() {
   const [err, setErr] = useState("");
   return (
     <>
-      <div className="page-head"><div><h1>Catalog</h1><p className="muted" style={{ margin: 0 }}>Products you can add to orders and send to customers with a payment link.</p></div></div>
+      <div className="page-head"><div><h1>Catalog</h1><p className="muted" style={{ margin: 0 }}>Rooms, packages or products you can add to a booking/order and collect an advance for with a payment link.</p></div></div>
       <div className="card mb" style={{ maxWidth: 560 }}>
         <h2>Add product</h2>
         <div className="row"><div className="grow"><label>Name</label><input value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} /></div><div style={{ width: 130 }}><label>Price (₹)</label><input type="number" value={f.price} onChange={(e) => setF({ ...f, price: e.target.value })} /></div></div>

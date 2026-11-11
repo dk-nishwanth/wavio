@@ -13,6 +13,9 @@ export default function Inbox() {
   const tpls = useApi<any[]>("/api/templates");
   const [text, setText] = useState(""); const [note, setNote] = useState(false); const [err, setErr] = useState("");
   const [tpl, setTpl] = useState(""); const [tplParams, setTplParams] = useState("");
+  const c0: string | null = chat.data?.conversation?.contact_id ?? null;
+  const stays = useApi<any[]>(c0 ? `/api/stays?contactId=${c0}` : null, 8000);
+  const [stay, setStay] = useState({ check_in_date: "", check_out_date: "", guests: "2", room: "" });
   const [sim, setSim] = useState({ phone: "", text: "Hi!" });
   const bottom = useRef<HTMLDivElement>(null);
   const n = chat.data?.messages?.length;
@@ -105,6 +108,19 @@ export default function Inbox() {
           <label>Bot</label>
           <button className="btn ghost" onClick={() => patch({ bot_paused: !c.bot_paused })}>{c.bot_paused ? "Resume automations" : "Pause automations"}</button>
           <p className="small muted">Automations pause automatically when an agent replies.</p>
+          <h2 className="mt">Stays</h2>
+          {(stays.data ?? []).map((x) => (
+            <div key={x.booking_id} className="card soft" style={{ padding: 10, marginBottom: 8 }}>
+              <div className="row between"><b style={{ fontWeight: 600 }}>{x.booking_id}</b><span className={"pill " + (x.status === "cancelled" ? "bad" : x.status === "upcoming" ? "warn" : "ok")}>{x.status.replace("_", " ")}</span></div>
+              <div className="small">{x.check_in} → {x.check_out}<br />{x.guests} guests {x.room && `· ${x.room}`}</div>
+              {x.status === "upcoming" && <a className="small muted" style={{ cursor: "pointer" }} onClick={async () => { if (confirm("Cancel this stay? Pending reminders stop.")) { await api("/api/stays/cancel", "POST", { contactId: c0, booking_id: x.booking_id }); stays.reload(); } }}>cancel stay</a>}
+            </div>))}
+          <details><summary className="small muted" style={{ cursor: "pointer" }}>Record a booking</summary>
+            <label>Check-in</label><input type="date" value={stay.check_in_date} onChange={(e) => setStay({ ...stay, check_in_date: e.target.value })} />
+            <label>Check-out</label><input type="date" value={stay.check_out_date} onChange={(e) => setStay({ ...stay, check_out_date: e.target.value })} />
+            <div className="row"><div className="grow"><label>Guests</label><input type="number" value={stay.guests} onChange={(e) => setStay({ ...stay, guests: e.target.value })} /></div><div className="grow"><label>Room (optional)</label><input value={stay.room} onChange={(e) => setStay({ ...stay, room: e.target.value })} /></div></div>
+            <button className="btn mt" disabled={!stay.check_in_date || !stay.check_out_date} onClick={async () => { try { await api("/api/stays", "POST", { contactId: c0, ...stay }); setStay({ check_in_date: "", check_out_date: "", guests: "2", room: "" }); stays.reload(); } catch (e: any) { setErr(e.message); } }}>Confirm booking</button>
+            <p className="muted small">Starts the confirmation, reminder and review messages.</p></details>
           {Object.keys(c.attrs).length > 0 && (<><label>Attributes</label><pre>{JSON.stringify(c.attrs, null, 1)}</pre></>)}
         </>)}
       </div>

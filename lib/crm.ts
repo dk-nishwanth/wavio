@@ -32,6 +32,7 @@ export function computeScore(ws: string, contactId: string): number {
   score += Math.min(read, 3) * 3;
   const ev = (name: string) => get<any>("SELECT COUNT(*) n FROM events WHERE contact_id=? AND name=?", contactId, name)!.n > 0;
   if (ev("order_placed")) score += 30;
+  if (ev("booking_confirmed")) score += 30;
   if (ev("cart_updated")) score += 12;
   if (ev("payment_completed")) score += 20;
   const tags: string[] = JSON.parse(c.tags);
@@ -53,7 +54,7 @@ export function touchLead(ws: string, contactId: string, source = "whatsapp") {
   }
   const score = computeScore(ws, contactId);
   // an order is a conversion signal: move open leads forward automatically
-  const bought = get<any>("SELECT 1 x FROM events WHERE contact_id=? AND name IN ('order_placed','payment_completed')", contactId);
+  const bought = get<any>("SELECT 1 x FROM events WHERE contact_id=? AND name IN ('order_placed','payment_completed','booking_confirmed')", contactId);
   const stage = bought && !["won", "lost"].includes(lead.stage) ? "won" : lead.stage;
   if (stage !== lead.stage) logActivity(ws, contactId, "stage", "Moved to Won (order placed)");
   run("UPDATE leads SET score=?, stage=?, updated_at=? WHERE id=?", score, stage, now(), lead.id);

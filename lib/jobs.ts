@@ -1,6 +1,7 @@
 import { deliverMessage, deliverWebhook, dispatchCampaign } from "./core";
 import { runStep, shouldCancel } from "./automation";
-import { execFlow } from "./flow";
+import { execFlow, runCancelled } from "./flow";
+import { run as sql } from "./db";
 import { all, run } from "./db";
 import * as wa from "./wa";
 import { pushLeadToZoho } from "./zoho";
@@ -17,7 +18,10 @@ export const handlers: Record<string, Handler> = {
     await runStep(p);
   },
   zoho_push: (p) => pushLeadToZoho(p.workspaceId, p.contactId),
-  flow_step: async (p) => { await execFlow(p.runId, p.nodeId); },
+  flow_step: async (p) => {
+    if (p.cancelEvent && runCancelled(p.runId, p.cancelEvent)) return void sql("UPDATE flow_runs SET status='done', updated_at=? WHERE id=?", Date.now(), p.runId);
+    await execFlow(p.runId, p.nodeId);
+  },
   sync_templates: async (p) => {
     const cfg = wa.waConfig(p.workspaceId);
     for (const t of await wa.fetchTemplateStatuses(cfg)) {

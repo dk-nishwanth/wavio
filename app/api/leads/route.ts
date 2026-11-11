@@ -1,11 +1,12 @@
 import { get } from "@/lib/db";
 import { requireSession } from "@/lib/auth";
 import { handle, json } from "@/lib/http";
-import { listLeads, STAGES, touchLead } from "@/lib/crm";
+import { listLeads, touchLead } from "@/lib/crm";
+import { stagesFor } from "@/lib/industry";
 
 export const GET = handle(async () => {
   const s = await requireSession();
-  return json({ stages: STAGES, leads: listLeads(s.workspaceId) });
+  return json({ stages: stagesFor(s.workspaceId), leads: listLeads(s.workspaceId) });
 });
 
 /** Promote an existing contact to a lead. */

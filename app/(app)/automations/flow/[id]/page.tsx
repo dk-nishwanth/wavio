@@ -15,6 +15,7 @@ const META: Record<string, { label: string; color: string; ports?: (d: any) => {
   ask: { label: "Ask a question", color: "#2563eb" },
   send_flow: { label: "WhatsApp Flow form", color: "#0891b2" },
   wait: { label: "Wait", color: "#d97706" },
+  wait_until: { label: "Wait until date", color: "#d97706", ports: () => [{ id: "ready", label: "At that time" }, { id: "late", label: "Already passed" }] },
   condition: { label: "Condition", color: "#7c3aed", ports: () => [{ id: "yes", label: "Yes" }, { id: "no", label: "No" }] },
   tag: { label: "Add tag", color: "#475569" },
   set_stage: { label: "Set lead stage", color: "#475569" },
@@ -32,7 +33,8 @@ const summary = (n: N) => {
     case "send_flow": return d.flow_id ? `Flow ${d.flow_id}` : "Enter a Flow ID";
     case "send_text": case "buttons": case "ask": return d.text || "Empty message";
     case "send_template": return d.template || "Choose a template";
-    case "wait": return `${d.minutes ?? 0} minutes`;
+    case "wait": return `${d.minutes ?? 0} minutes${d.unless_event ? ` (stop if ${d.unless_event})` : ""}`;
+    case "wait_until": return `${Math.abs(d.offset_days ?? 0)} day(s) ${(d.offset_days ?? 0) < 0 ? "before" : "after"} ${d.date || "a date"}, ${d.at_hour ?? 9}:00`;
     case "condition": return `${d.field ?? "tag"} ${d.op ?? "="} ${d.value ?? ""}`;
     case "tag": return d.tag || "—";
     case "set_stage": return d.stage || "—";
@@ -79,7 +81,7 @@ export default function FlowEditor({ params }: { params: Promise<{ id: string }>
   const setData = (patch: object) => setNodes((ns) => ns.map((n) => (n.id === sel ? { ...n, data: { ...n.data, ...patch } } : n)));
   const defaults: Record<string, any> = {
     send_text: { text: "" }, send_template: { template: "", params: [] }, buttons: { text: "Choose an option:", buttons: ["Yes", "No"] }, ask: { text: "What's your email?", variable: "email", save_to_contact: true },
-    send_flow: { text: "Please fill in this form", flow_id: "", cta: "Open form", screen: "" }, wait: { minutes: 60 }, condition: { field: "tag", value: "", op: "eq", key: "" }, tag: { tag: "" }, set_stage: { stage: "contacted" }, handoff: {}, http: { url: "" },
+    send_flow: { text: "Please fill in this form", flow_id: "", cta: "Open form", screen: "" }, wait: { minutes: 60, unless_event: "" }, wait_until: { date: "{{event.check_in_date}}", offset_days: -2, at_hour: 9, cancel_event: "booking_cancelled" }, condition: { field: "tag", value: "", op: "eq", key: "" }, tag: { tag: "" }, set_stage: { stage: "contacted" }, handoff: {}, http: { url: "" },
   };
   function add(type: string) {
     const max = nodes.reduce((m, n) => Math.max(m, n.y + height(n)), 0);
@@ -183,7 +185,13 @@ export default function FlowEditor({ params }: { params: Promise<{ id: string }>
               <label>Button text</label><input value={node.data.cta ?? ""} onChange={(e) => setData({ cta: e.target.value })} />
               <label>First screen ID (optional)</label><input value={node.data.screen ?? ""} onChange={(e) => setData({ screen: e.target.value })} />
               <p className="muted small">Answers are saved on the contact and fire the <code>flow_completed</code> event.</p></>)}
-            {node.type === "wait" && (<><label>Wait (minutes)</label><input type="number" value={node.data.minutes ?? 0} onChange={(e) => setData({ minutes: Number(e.target.value) })} /></>)}
+            {node.type === "wait" && (<><label>Wait (minutes)</label><input type="number" value={node.data.minutes ?? 0} onChange={(e) => setData({ minutes: Number(e.target.value) })} />
+              <label>Stop the flow if this event happens (optional)</label><input placeholder="order_placed" value={node.data.unless_event ?? ""} onChange={(e) => setData({ unless_event: e.target.value })} /></>)}
+            {node.type === "wait_until" && (<><label>Date to wait for</label><input value={node.data.date ?? ""} onChange={(e) => setData({ date: e.target.value })} />
+              <p className="muted small" style={{ margin: "4px 0 0" }}>e.g. <code>{"{{event.check_in_date}}"}</code> (YYYY-MM-DD) or a date from <code>{"{{vars.dates}}"}</code>.</p>
+              <div className="row"><div className="grow"><label>Days offset (negative = before)</label><input type="number" value={node.data.offset_days ?? 0} onChange={(e) => setData({ offset_days: Number(e.target.value) })} /></div><div className="grow"><label>At hour (0-23)</label><input type="number" min={0} max={23} value={node.data.at_hour ?? 9} onChange={(e) => setData({ at_hour: Number(e.target.value) })} /></div></div>
+              <label>Stop if this event happens (optional)</label><input value={node.data.cancel_event ?? ""} onChange={(e) => setData({ cancel_event: e.target.value })} />
+              <p className="muted small">If that moment has already passed, the flow follows the &quot;Already passed&quot; port.</p></>)}
             {node.type === "condition" && (<><label>Check</label><select value={node.data.field} onChange={(e) => setData({ field: e.target.value })}><option value="tag">Contact has tag</option><option value="attr">Contact attribute</option><option value="var">Answer saved earlier</option><option value="stage">Lead stage</option></select>
               {["attr", "var"].includes(node.data.field) && (<><label>Name</label><input value={node.data.key ?? ""} onChange={(e) => setData({ key: e.target.value })} /></>)}
               {node.data.field !== "tag" && (<><label>Operator</label><select value={node.data.op} onChange={(e) => setData({ op: e.target.value })}><option value="eq">equals</option><option value="neq">does not equal</option><option value="contains">contains</option></select></>)}

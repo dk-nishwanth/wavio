@@ -24,7 +24,8 @@ const groups: { title: string; links: [string, string, keyof typeof I][] }[] = [
   { title: "Build", links: [["/team", "Team", "users"], ["/billing", "Billing", "card"], ["/developers", "Developers", "code"], ["/settings", "Settings", "cog"]] },
 ];
 
-export default function Nav({ name }: { name: string }) {
+export default function Nav({ name, terms }: { name: string; terms: { catalog: string; orders: string } }) {
+  const label = (l: string) => (l === "Catalog" ? terms.catalog : l === "Orders" ? terms.orders : l);
   const path = usePathname();
   return (
     <nav className="side">
@@ -32,9 +33,9 @@ export default function Nav({ name }: { name: string }) {
       {groups.map((g) => (
         <div key={g.title}>
           <div className="grp">{g.title}</div>
-          {g.links.map(([href, label, icon]) => (
+          {g.links.map(([href, l, icon]) => (
             <Link key={href} href={href} className={"nav" + (path.startsWith(href) ? " on" : "")}>
-              <svg viewBox="0 0 24 24">{I[icon]}</svg>{label}
+              <svg viewBox="0 0 24 24">{I[icon]}</svg>{label(l)}
             </Link>
           ))}
         </div>

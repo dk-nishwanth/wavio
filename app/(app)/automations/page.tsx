@@ -11,6 +11,7 @@ export default function Automations() {
   const tpls = useApi<any[]>("/api/templates");
   const [f, setF] = useState<{ name: string; trigger_type: string; trigger_value: string; steps: Step[] }>({ name: "", trigger_type: "event", trigger_value: "", steps: [] });
   const [msg, setMsg] = useState("");
+  const [packMsg, setPackMsg] = useState("");
   const upd = (i: number, patch: object) => setF({ ...f, steps: f.steps.map((s, j) => (j === i ? { ...s, ...patch } : s)) });
   const preset = (kind: string) => {
     if (kind === "cart") setF({ name: "Abandoned cart recovery", trigger_type: "event", trigger_value: "cart_updated", steps: [{ type: "wait", minutes: 60, unless_event: "order_placed" }, { type: "send_template", template: "", params: ["{{contact.name}}", "{{event.cart_url}}"] }] });
@@ -20,6 +21,8 @@ export default function Automations() {
   return (
     <>
       <h1>Automations</h1><p className="muted mb">Trigger on a website event, a keyword, or a customer&apos;s first message, then run steps. A <b>wait</b> step with &quot;cancel if event&quot; handles abandoned carts.</p>
+      <div className="card soft mb row between wrap"><div><b style={{ fontWeight: 600 }}>Resort starter pack</b><div className="muted small">Installs an enquiry chatbot, booking confirmation, 2-day check-in reminder, post-stay review request and 4 message templates. Edit anything afterwards.</div></div>
+        <div className="row"><span className="muted small">{packMsg}</span><button className="btn" onClick={async () => { const r = await api("/api/starter/resort", "POST"); setPackMsg(r.created.length ? `Added ${r.created.length} items` : "Already installed"); reload(); }}>Install resort pack</button></div></div>
       <div className="row mb wrap"><Link href="/automations/flow/new" className="btn">+ New visual flow</Link><span className="muted small">or start a simple one from:</span>
         <button className="btn ghost" onClick={() => preset("order")}>Order confirmation</button><button className="btn ghost" onClick={() => preset("cart")}>Abandoned cart</button><button className="btn ghost" onClick={() => preset("faq")}>Keyword reply</button></div>
       <div className="card mb" style={{ maxWidth: 720 }}>

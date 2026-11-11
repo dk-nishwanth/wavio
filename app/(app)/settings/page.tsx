@@ -21,6 +21,7 @@ export default function Settings() {
         <label>Meta app secret (verifies webhook signatures) {data?.hasAppSecret && <span className="pill ok">saved</span>}</label><input type="password" value={f.appSecret} onChange={set("appSecret")} />
         <button className="btn mt" onClick={async () => { await api("/api/settings", "PUT", f); setF({ phoneNumberId: "", wabaId: "", token: "", appSecret: "" }); setMsg("Saved"); reload(); }}>Save</button> <span className="muted">{msg}</span>
       </div>
+      {data && <BusinessCard data={data} reload={reload} />}
       {data && <PaymentsCard data={data.payments} reload={reload} />}
       {data && <MetaCard data={data.meta} reload={reload} />}
       {data && <IntegrationsCard data={data.integrations} reload={reload} />}
@@ -93,6 +94,22 @@ function IntegrationsCard({ data, reload }: { data: any; reload: () => void }) {
         {data.zohoConnected && <button className="btn ghost" onClick={async () => { await api("/api/settings", "PUT", { disconnectZoho: true }); reload(); }}>Disconnect</button>}</div>
       <h2 style={{ marginTop: 16 }}>Gmail &amp; Zoom</h2>
       <p className="muted small">Both work through the Events API in Developers: a Google Apps Script (Gmail) or a Zoom webhook relay posts <code>{"{ event, phone, properties }"}</code> to <code>/api/v1/events</code> with your secret key. Example snippets are on the Developers page.</p>
+    </div>
+  );
+}
+
+function BusinessCard({ data, reload }: { data: any; reload: () => void }) {
+  const [f, setF] = useState({ industry: data.industry, name: data.business?.name ?? "", location: data.business?.location ?? "", check_in_time: data.business?.check_in_time ?? "12:00 PM", check_out_time: data.business?.check_out_time ?? "11:00 AM" });
+  const [msg, setMsg] = useState("");
+  const set = (k: string) => (e: any) => setF({ ...f, [k]: e.target.value });
+  return (
+    <div className="card mt" style={{ maxWidth: 620 }}>
+      <h2>Business profile</h2>
+      <p className="muted small">Sets the pipeline wording (e.g. Enquiry → Booked for resorts) and fills your message templates.</p>
+      <div className="row"><div className="grow"><label>Business type</label><select value={f.industry} onChange={set("industry")}><option value="general">General</option><option value="resort">Resort / hospitality</option></select></div>
+        <div className="grow"><label>Business name</label><input value={f.name} onChange={set("name")} placeholder="Jawai Retreat" /></div></div>
+      <div className="row"><div className="grow"><label>Location</label><input value={f.location} onChange={set("location")} /></div><div style={{ width: 130 }}><label>Check-in</label><input value={f.check_in_time} onChange={set("check_in_time")} /></div><div style={{ width: 130 }}><label>Check-out</label><input value={f.check_out_time} onChange={set("check_out_time")} /></div></div>
+      <div className="row mt"><button className="btn" onClick={async () => { await api("/api/settings", "PUT", { industry: f.industry, business: { name: f.name, location: f.location, check_in_time: f.check_in_time, check_out_time: f.check_out_time } }); setMsg("Saved — reload to update menu labels"); reload(); }}>Save</button><span className="muted small">{msg}</span></div>
     </div>
   );
 }

@@ -1,6 +1,7 @@
 import { all, get, id, now, run } from "./db";
 import { enqueue } from "./queue";
 import { logActivity, setStage } from "./crm";
+import { addDays, atLocal, parseDate } from "./dates";
 
 export type FlowNode = { id: string; type: string; x: number; y: number; data: Record<string, any> };
 export type FlowEdge = { id: string; from: string; port: string; to: string };
@@ -74,7 +75,18 @@ export async function execFlow(runId: string, nodeId: string | null) {
           return;
         case "wait": {
           const after = next(g, n.id);
-          if (after) enqueue("flow_step", { runId, nodeId: after }, { workspaceId: ws, runAt: now() + Number(d.minutes || 0) * 60_000 });
+          if (after) enqueue("flow_step", { runId, nodeId: after, cancelEvent: d.unless_event || undefined }, { workspaceId: ws, runAt: now() + Number(d.minutes || 0) * 60_000 });
+          return;
+        }
+        case "wait_until": {
+          // sleep until a date from the event/contact (e.g. check-in date) plus an offset; "late" fires if that moment already passed
+          const raw = render(d.date ?? "", c, vars);
+          const day = parseDate(raw);
+          if (!day) throw new Error(`couldn't read a date from "${raw}"`);
+          const at = atLocal(addDays(day, Number(d.offset_days || 0)), Number(d.at_hour ?? 9));
+          if (at <= now()) { cur = next(g, n.id, "late"); break; }
+          const ready = next(g, n.id, "ready");
+          if (ready) enqueue("flow_step", { runId, nodeId: ready, cancelEvent: d.cancel_event || undefined }, { workspaceId: ws, runAt: at });
           return;
         }
         case "condition": cur = next(g, n.id, condition(d, c, vars) ? "yes" : "no"); break;
@@ -127,6 +139,15 @@ export async function resumeWaiting(ws: string, contactId: string, text: string)
   run("UPDATE flow_runs SET status='running', waiting_node=NULL WHERE id=?", r.id);
   await execFlow(r.id, next(g, n.id, port));
   return true;
+}
+
+/** True if the event that should stop this run (e.g. a cancelled booking) has happened since the run started. */
+export function runCancelled(runId: string, eventName: string): boolean {
+  const r = get<any>("SELECT * FROM flow_runs WHERE id=?", runId);
+  if (!r) return true;
+  const bookingId = JSON.parse(r.vars).event?.booking_id;
+  return all<any>("SELECT payload FROM events WHERE contact_id=? AND name=? AND created_at >= ?", r.contact_id, eventName, r.created_at)
+    .some((e) => !bookingId || !JSON.parse(e.payload).booking_id || JSON.parse(e.payload).booking_id === bookingId);
 }
 
 export const listRuns = (ws: string, automationId: string) =>
