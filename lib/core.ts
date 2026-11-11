@@ -4,6 +4,7 @@ import { HttpError } from "./auth";
 import { enqueue } from "./queue";
 import * as wa from "./wa";
 import { startAutomations } from "./automation";
+import { touchLead } from "./crm";
 
 export const WINDOW_MS = 24 * 3600 * 1000;
 
@@ -186,6 +187,7 @@ export function receiveInbound(
     mid, ws, conv.id, contact.id, "in", msg.type, msg.text, msg.waId ?? null, "received", now(),
   );
   touchConversation(conv.id, msg.text, true);
+  touchLead(ws, contact.id, "whatsapp");
   emitWebhook(ws, "message.received", { messageId: mid, contactId: contact.id, phone: contact.phone, text: msg.text });
 
   const t = msg.text.trim().toLowerCase();

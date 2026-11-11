@@ -1,5 +1,6 @@
 import { all, get, now, run } from "./db";
 import { enqueue } from "./queue";
+import { setStage } from "./crm";
 
 export type Step =
   | { type: "send_text"; text: string }
@@ -8,6 +9,7 @@ export type Step =
   | { type: "wait"; minutes: number; unless_event?: string }
   | { type: "tag"; tag: string }
   | { type: "assign"; user_id: string }
+  | { type: "set_stage"; stage: string }
   | { type: "http"; url: string };
 
 type Ctx = { event?: Record<string, any>; text?: string };
@@ -63,6 +65,9 @@ export async function runStep(p: { automationId: string; contactId: string; inde
       run("UPDATE contacts SET tags=? WHERE id=?", JSON.stringify(tags), contact.id);
       break;
     }
+    case "set_stage":
+      setStage(ws, contact.id, step.stage);
+      break;
     case "assign":
       run("UPDATE conversations SET assigned_to=? WHERE contact_id=?", step.user_id, contact.id);
       break;

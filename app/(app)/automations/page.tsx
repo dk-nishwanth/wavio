@@ -3,7 +3,7 @@ import { useState } from "react";
 import { api, useApi } from "@/components/api";
 
 type Step = any;
-const blank = (t: string): Step => ({ send_text: { type: "send_text", text: "" }, send_template: { type: "send_template", template: "", params: [] }, buttons: { type: "buttons", text: "", buttons: ["Yes", "No"] }, wait: { type: "wait", minutes: 30 }, tag: { type: "tag", tag: "" }, http: { type: "http", url: "" } } as any)[t];
+const blank = (t: string): Step => ({ send_text: { type: "send_text", text: "" }, send_template: { type: "send_template", template: "", params: [] }, buttons: { type: "buttons", text: "", buttons: ["Yes", "No"] }, wait: { type: "wait", minutes: 30 }, tag: { type: "tag", tag: "" }, set_stage: { type: "set_stage", stage: "contacted" }, http: { type: "http", url: "" } } as any)[t];
 
 export default function Automations() {
   const { data, reload } = useApi<any[]>("/api/automations");
@@ -35,9 +35,10 @@ export default function Automations() {
             {s.type === "buttons" && <><textarea rows={2} value={s.text} onChange={(e) => upd(i, { text: e.target.value })} /><label>Buttons (max 3, one per line)</label><textarea rows={2} value={s.buttons.join("\n")} onChange={(e) => upd(i, { buttons: e.target.value.split("\n").slice(0, 3) })} /></>}
             {s.type === "wait" && <div className="row"><input type="number" style={{ width: 100 }} value={s.minutes} onChange={(e) => upd(i, { minutes: Number(e.target.value) })} /><span>minutes. Cancel the run if event</span><input placeholder="order_placed (optional)" value={s.unless_event ?? ""} onChange={(e) => upd(i, { unless_event: e.target.value || undefined })} /></div>}
             {s.type === "tag" && <input placeholder="tag" value={s.tag} onChange={(e) => upd(i, { tag: e.target.value })} />}
+            {s.type === "set_stage" && <select value={s.stage} onChange={(e) => upd(i, { stage: e.target.value })}>{["new", "contacted", "qualified", "proposal", "won", "lost"].map((x) => <option key={x}>{x}</option>)}</select>}
             {s.type === "http" && <input placeholder="https://your-site.com/hook" value={s.url} onChange={(e) => upd(i, { url: e.target.value })} />}
           </div>))}
-        <div className="row wrap">{["send_text", "send_template", "buttons", "wait", "tag", "http"].map((t) => <button key={t} className="btn ghost" onClick={() => setF({ ...f, steps: [...f.steps, blank(t)] })}>+ {t.replace("_", " ")}</button>)}</div>
+        <div className="row wrap">{["send_text", "send_template", "buttons", "wait", "tag", "set_stage", "http"].map((t) => <button key={t} className="btn ghost" onClick={() => setF({ ...f, steps: [...f.steps, blank(t)] })}>+ {t.replace("_", " ")}</button>)}</div>
         {msg && <p style={{ color: "var(--danger)" }}>{msg}</p>}
         <button className="btn mt" disabled={!f.steps.length} onClick={async () => { try { await api("/api/automations", "POST", f); setF({ name: "", trigger_type: "event", trigger_value: "", steps: [] }); setMsg(""); reload(); } catch (e: any) { setMsg(e.message); } }}>Save automation</button>
       </div>

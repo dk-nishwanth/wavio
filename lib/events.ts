@@ -1,6 +1,7 @@
 import { get, id, now, run } from "./db";
 import { upsertContact, ensureConversation } from "./core";
 import { startAutomations } from "./automation";
+import { touchLead } from "./crm";
 
 export function ingestEvent(
   ws: string,
@@ -18,6 +19,7 @@ export function ingestEvent(
     "INSERT INTO events (id, workspace_id, contact_id, name, payload, idempotency_key, created_at) VALUES (?,?,?,?,?,?,?)",
     eid, ws, contact?.id ?? null, e.name, JSON.stringify(e.payload ?? {}), e.idempotencyKey ?? null, now(),
   );
+  if (contact) touchLead(ws, contact.id, "website");
   if (contact) startAutomations(ws, contact.id, "event", { name: e.name, event: e.payload ?? {} });
   return { id: eid, contactId: contact?.id ?? null };
 }

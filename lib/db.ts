@@ -72,6 +72,18 @@ CREATE TABLE IF NOT EXISTS jobs (
   last_error TEXT, created_at INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_jobs_due ON jobs(status, run_at);
+CREATE TABLE IF NOT EXISTS leads (
+  id TEXT PRIMARY KEY, workspace_id TEXT NOT NULL, contact_id TEXT NOT NULL UNIQUE,
+  stage TEXT NOT NULL DEFAULT 'new', score INTEGER NOT NULL DEFAULT 0, value REAL NOT NULL DEFAULT 0,
+  source TEXT, owner_id TEXT, notes TEXT, follow_up_at INTEGER,
+  created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_leads_ws ON leads(workspace_id, stage);
+CREATE TABLE IF NOT EXISTS activities (
+  id TEXT PRIMARY KEY, workspace_id TEXT NOT NULL, contact_id TEXT NOT NULL,
+  kind TEXT NOT NULL, text TEXT NOT NULL, created_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_act_contact ON activities(contact_id, created_at);
 `;
 
 const g = globalThis as unknown as { __db?: DatabaseSync };
