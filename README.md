@@ -1,27 +1,46 @@
-# WAConnect
+# Wavio
 
-WhatsApp inbox, broadcasts and automation, wired to a React website through a small SDK.
+WhatsApp inbox, chatbots, broadcasts, CRM and automations for your website, with a resort starter pack. Docs: [Wylto research and roadmap](docs/wylto-research.md).
 
 ## Run locally
 ```bash
 npm install
-npm run dev        # app on http://localhost:3000
-npm run worker     # second terminal: sends messages, runs waits/drips, fires webhooks
+cp .env.example .env.local
+npm run dev      # app + job loop on http://localhost:3000
+npm run seed -- <username> <password> "My Resort"   # optional first account
+npm test         # 38 automated tests
 ```
-Sign up at `/login`. With no WhatsApp credentials the app runs in **test mode** (messages are simulated, templates auto-approve),
-so you can try everything — use "Simulate an inbound message" in the Inbox and the `/demo` storefront.
+With no WhatsApp credentials the app runs in **test mode**: messages are simulated and the inbox has a simulator. In production an unconnected number fails loudly instead.
 
 ## Going live with WhatsApp
-1. Settings → paste Phone number ID, WABA ID, permanent token (and app secret).
-2. In Meta → WhatsApp → Configuration set the callback URL + verify token shown in Settings, subscribe to `messages`.
-3. Create templates; they are submitted to Meta and sync back with "Sync status".
+Settings → paste Phone number ID, WABA ID, access token and app secret → **Check connection** → **Send test**. Expose the app on a public https address, then add the callback URL and verify token shown in Settings to your Meta app (field `messages`). Template messages need Meta approval; free text works only within 24 hours of the guest's last message.
 
-## Architecture
-- Next.js app (UI + REST API) · SQLite (`node:sqlite`, schema in `lib/db.ts`) · DB-backed job queue (`lib/queue.ts`) · worker (`worker.ts`)
-- `lib/core.ts` messaging, 24h-window + opt-in rules, inbound handling, campaigns, outbound webhooks
-- `lib/automation.ts` event/keyword/first-message triggers; steps: text, template, buttons, wait (+cancel-on-event), tag, assign, http
-- `app/api/v1/*` public API (public key for browser, secret key for server) · `sdk/index.tsx` React SDK · `app/demo` sample site
+## Environment
+| Variable | Purpose |
+|---|---|
+| `APP_SECRET` | Signs sessions and derives the secrets key. 32+ random characters. **Required in production.** |
+| `ENCRYPTION_KEY` | Optional separate key for encrypting stored tokens (defaults to `APP_SECRET`). Losing it makes saved tokens unreadable. |
+| `APP_URL` | Public https address (webhook URLs, payment links). |
+| `CRON_SECRET` | Bearer token for `/api/cron/tick` if you drive jobs from a scheduler. |
+| `DATABASE_PATH` | SQLite file (default `./data/app.db`). |
+| `BACKUP_DIR`, `BACKUP_KEEP`, `AUTO_BACKUP=0` | Backup folder (default `./backups`), copies kept (14), disable the daily auto-backup. |
+| `MEDIA_DIR` | Where attachments are stored (default next to the database). |
+| `ALLOW_DEV_TOOLS=1` | Re-enables simulators / test checkout in production. Leave unset. |
+| `INLINE_WORKER=0` | Disable the in-server job loop (run `npm run worker` instead). |
+| `PLATFORM_RAZORPAY_*`, `SELLER_*` | Your own billing gateway and GST invoice seller details. |
 
-## Production notes
-- SQLite is for a single server. For serverless hosting (e.g. Vercel) swap `lib/db.ts` for Postgres; keep the worker on a long-running host or call `/api/cron/tick` every minute with `Authorization: Bearer $CRON_SECRET`.
-- Set a real `APP_SECRET`. Bare 10-digit numbers are assumed to be Indian (+91) — see `normalizePhone`.
+In production the server refuses to start with placeholder secrets.
+
+## Security
+Secrets (WhatsApp token, app secret, payment keys, integration tokens) are AES-256-GCM encrypted in the database. Logins are rate limited (5 failures per user per 15 min), API keys are limited to 600 requests/min, changing a password signs out every other device, webhooks require a valid signature in production, and responses carry hardening headers.
+
+Forgot a password? Another admin can reset it on the Team page, or run `npm run reset-password -- <username> <new-password>` on the server.
+
+## Backups
+A verified snapshot is written daily to `backups/` (last 14 kept) by the running server. Take one any time with `npm run backup`. To restore: stop the app, copy a snapshot over `data/app.db` (delete `app.db-wal` and `app.db-shm`), start the app. Attachments live in `data/media/`; back that folder up too.
+
+## Pilot deployment (single server)
+Run on one VM with a persistent disk: `npm run build && npm start`, behind HTTPS (Caddy/nginx/Cloudflare Tunnel), with the env vars above. The job loop runs inside the server. Not suitable for serverless hosts (Vercel) until the database moves to Postgres.
+
+## Layout
+`lib/` core logic (messaging, flows, CRM, billing, payments) · `app/api/` REST API · `app/(app)/` dashboard · `sdk/` React SDK · `tests/` Vitest suites · `worker.ts` standalone job runner.

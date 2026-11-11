@@ -1,4 +1,6 @@
 import { get } from "./db";
+import { decrypt } from "./crypto";
+import { isProd } from "./env";
 
 const GRAPH = "https://graph.facebook.com/v21.0";
 
@@ -11,10 +13,16 @@ export type WaConfig = { phoneNumberId: string | null; wabaId: string | null; to
 
 export function waConfig(workspaceId: string): WaConfig {
   const w = get<any>("SELECT * FROM workspaces WHERE id=?", workspaceId);
-  return { phoneNumberId: w?.wa_phone_number_id ?? null, wabaId: w?.wa_waba_id ?? null, token: w?.wa_token ?? null };
+  return { phoneNumberId: w?.wa_phone_number_id ?? null, wabaId: w?.wa_waba_id ?? null, token: decrypt(w?.wa_token) };
 }
 
 export const isMock = (c: WaConfig) => !c.token || !c.phoneNumberId;
+
+/** Test mode fakes a send. In production an unconnected number must fail loudly instead of pretending. */
+function mockSend(): string {
+  if (isProd()) throw new WaError("WhatsApp is not connected — add your credentials in Settings", true);
+  return "mock_" + Math.random().toString(36).slice(2);
+}
 
 async function graph(c: WaConfig, path: string, body?: object, method = body ? "POST" : "GET") {
   const res = await fetch(`${GRAPH}/${path}`, {
@@ -35,7 +43,7 @@ async function graph(c: WaConfig, path: string, body?: object, method = body ? "
 export const toWaNumber = (phone: string) => phone.replace(/[^\d]/g, "");
 
 export async function sendText(c: WaConfig, to: string, text: string): Promise<string> {
-  if (isMock(c)) return "mock_" + Math.random().toString(36).slice(2);
+  if (isMock(c)) return mockSend();
   const d = await graph(c, `${c.phoneNumberId}/messages`, {
     messaging_product: "whatsapp", to: toWaNumber(to), type: "text", text: { body: text, preview_url: true },
   });
@@ -43,7 +51,7 @@ export async function sendText(c: WaConfig, to: string, text: string): Promise<s
 }
 
 export async function sendTemplate(c: WaConfig, to: string, name: string, language: string, params: string[]): Promise<string> {
-  if (isMock(c)) return "mock_" + Math.random().toString(36).slice(2);
+  if (isMock(c)) return mockSend();
   const d = await graph(c, `${c.phoneNumberId}/messages`, {
     messaging_product: "whatsapp", to: toWaNumber(to), type: "template",
     template: {
@@ -57,7 +65,7 @@ export async function sendTemplate(c: WaConfig, to: string, name: string, langua
 }
 
 export async function sendInteractiveButtons(c: WaConfig, to: string, text: string, buttons: string[]): Promise<string> {
-  if (isMock(c)) return "mock_" + Math.random().toString(36).slice(2);
+  if (isMock(c)) return mockSend();
   const d = await graph(c, `${c.phoneNumberId}/messages`, {
     messaging_product: "whatsapp", to: toWaNumber(to), type: "interactive",
     interactive: {
@@ -75,7 +83,7 @@ export async function markRead(c: WaConfig, waMessageId: string) {
 
 /** Submit a template to Meta for approval. Returns Meta's template id + initial status. */
 export async function submitTemplate(c: WaConfig, t: { name: string; language: string; category: string; body: string }) {
-  if (!c.token || !c.wabaId) return { id: "mock_" + t.name, status: "APPROVED" };
+  if (!c.token || !c.wabaId) { if (isProd()) throw new WaError("WhatsApp is not connected", true); return { id: "mock_" + t.name, status: "APPROVED" }; }
   const d = await graph(c, `${c.wabaId}/message_templates`, {
     name: t.name, language: t.language, category: t.category,
     components: [{ type: "BODY", text: t.body, ...(/\{\{\d+\}\}/.test(t.body) ? { example: { body_text: [[...t.body.matchAll(/\{\{\d+\}\}/g)].map(() => "sample")] } } : {}) }],
@@ -91,7 +99,7 @@ export async function fetchTemplateStatuses(c: WaConfig): Promise<{ name: string
 
 /** Sends a Meta WhatsApp Flow (an in-chat form) published in your WhatsApp Manager. */
 export async function sendFlow(c: WaConfig, to: string, f: { text: string; flowId: string; cta: string; screen?: string; token: string }): Promise<string> {
-  if (isMock(c)) return "mock_" + Math.random().toString(36).slice(2);
+  if (isMock(c)) return mockSend();
   const d = await graph(c, `${c.phoneNumberId}/messages`, {
     messaging_product: "whatsapp", to: toWaNumber(to), type: "interactive",
     interactive: {
@@ -107,4 +115,34 @@ export async function checkConnection(c: WaConfig) {
   if (!c.token || !c.phoneNumberId) throw new WaError("Add the Phone number ID and access token first", true);
   const d = await graph(c, `${c.phoneNumberId}?fields=display_phone_number,verified_name,quality_rating,name_status,code_verification_status`);
   return { displayPhone: d.display_phone_number as string, verifiedName: d.verified_name as string, quality: d.quality_rating as string, nameStatus: d.name_status as string };
+}
+
+/** Uploads a file to Meta and returns the media id used when sending. */
+export async function uploadMedia(c: WaConfig, bytes: Buffer, mime: string, filename: string): Promise<string> {
+  if (isMock(c)) return mockSend();
+  const form = new FormData();
+  form.append("messaging_product", "whatsapp");
+  form.append("type", mime);
+  form.append("file", new Blob([new Uint8Array(bytes)], { type: mime }), filename);
+  const res = await fetch(`${GRAPH}/${c.phoneNumberId}/media`, { method: "POST", headers: { Authorization: `Bearer ${c.token}` }, body: form, signal: AbortSignal.timeout(60_000) });
+  const d: any = await res.json().catch(() => ({}));
+  if (!res.ok) throw new WaError(d?.error?.message || `Media upload failed (${res.status})`, res.status < 500 && res.status !== 429);
+  return d.id as string;
+}
+
+export async function sendMedia(c: WaConfig, to: string, kind: "image" | "video" | "audio" | "document", mediaId: string, o: { caption?: string; filename?: string } = {}): Promise<string> {
+  if (isMock(c)) return mockSend();
+  const body: any = { id: mediaId };
+  if (o.caption && kind !== "audio") body.caption = o.caption;
+  if (kind === "document" && o.filename) body.filename = o.filename;
+  const d = await graph(c, `${c.phoneNumberId}/messages`, { messaging_product: "whatsapp", to: toWaNumber(to), type: kind, [kind]: body });
+  return d.messages?.[0]?.id;
+}
+
+/** Customer media: Meta gives a short-lived URL for a media id, which needs the token to download. */
+export async function downloadMedia(c: WaConfig, mediaId: string): Promise<{ bytes: Buffer; mime: string }> {
+  const meta = await graph(c, mediaId);
+  const res = await fetch(meta.url, { headers: { Authorization: `Bearer ${c.token}` }, signal: AbortSignal.timeout(60_000) });
+  if (!res.ok) throw new WaError(`Media download failed (${res.status})`, res.status < 500 && res.status !== 429);
+  return { bytes: Buffer.from(await res.arrayBuffer()), mime: meta.mime_type ?? res.headers.get("content-type") ?? "" };
 }

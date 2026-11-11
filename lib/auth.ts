@@ -2,7 +2,11 @@ import crypto from "node:crypto";
 import { cookies } from "next/headers";
 import { get } from "./db";
 
-const secret = () => process.env.APP_SECRET || "dev-secret";
+const secret = () => {
+  const s = process.env.APP_SECRET || (process.env.NODE_ENV === "production" ? "" : "dev-secret");
+  if (!s) throw new Error("APP_SECRET is not set");
+  return s;
+};
 const b64 = (s: string) => Buffer.from(s).toString("base64url");
 const sign = (v: string) => crypto.createHmac("sha256", secret()).update(v).digest("base64url");
 
@@ -16,8 +20,8 @@ export function verifyPassword(pw: string, stored: string) {
   return crypto.timingSafeEqual(Buffer.from(hash), Buffer.from(test));
 }
 
-export function makeSession(userId: string) {
-  const body = b64(JSON.stringify({ u: userId, exp: Date.now() + 14 * 864e5 }));
+export function makeSession(userId: string, version = 0) {
+  const body = b64(JSON.stringify({ u: userId, v: version, exp: Date.now() + 14 * 864e5 }));
   return body + "." + sign(body);
 }
 
@@ -28,10 +32,10 @@ export async function getSession(): Promise<Session | null> {
   if (!c) return null;
   const [body, sig] = c.split(".");
   if (!body || !sig || sign(body) !== sig) return null;
-  const { u, exp } = JSON.parse(Buffer.from(body, "base64url").toString());
+  const { u, exp, v } = JSON.parse(Buffer.from(body, "base64url").toString());
   if (exp < Date.now()) return null;
   const user = get<any>("SELECT * FROM users WHERE id = ?", u);
-  if (!user) return null;
+  if (!user || (user.session_version ?? 0) !== (v ?? 0)) return null; // password changes sign every device out
   return { userId: user.id, workspaceId: user.workspace_id, role: user.role, name: user.name, email: user.email };
 }
 
@@ -44,5 +48,7 @@ export async function requireSession(): Promise<Session> {
 export class HttpError extends Error {
   constructor(public status: number, message: string) { super(message); }
 }
+
+export const COOKIE = { httpOnly: true, sameSite: "lax" as const, path: "/", maxAge: 14 * 86400, secure: process.env.NODE_ENV === "production" };
 
 export const sha256 = (s: string) => crypto.createHash("sha256").update(s).digest("hex");

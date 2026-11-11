@@ -5,6 +5,7 @@ import { run as sql } from "./db";
 import { all, run } from "./db";
 import * as wa from "./wa";
 import { pushLeadToZoho } from "./zoho";
+import { fetchInboundMedia } from "./media";
 
 type Handler = (payload: any, job: any) => Promise<void> | void;
 
@@ -17,6 +18,7 @@ export const handlers: Record<string, Handler> = {
     if (shouldCancel(p)) return;
     await runStep(p);
   },
+  fetch_media: (p) => fetchInboundMedia(p.messageId),
   zoho_push: (p) => pushLeadToZoho(p.workspaceId, p.contactId),
   flow_step: async (p) => {
     if (p.cancelEvent && runCancelled(p.runId, p.cancelEvent)) return void sql("UPDATE flow_runs SET status='done', updated_at=? WHERE id=?", Date.now(), p.runId);

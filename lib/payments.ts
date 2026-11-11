@@ -1,5 +1,8 @@
 import crypto from "node:crypto";
 import { get, now, run } from "./db";
+import { decrypt } from "./crypto";
+import { HttpError } from "./auth";
+import { devToolsEnabled } from "./env";
 import { ingestEvent } from "./events";
 import { logActivity } from "./crm";
 
@@ -8,7 +11,7 @@ export type PayCfg = {
   payu_key?: string; payu_salt?: string; payu_mode?: "test" | "live";
 };
 
-export const payCfg = (ws: string): PayCfg => JSON.parse(get<any>("SELECT pay_json FROM workspaces WHERE id=?", ws)?.pay_json ?? "{}");
+export const payCfg = (ws: string): PayCfg => JSON.parse(decrypt(get<any>("SELECT pay_json FROM workspaces WHERE id=?", ws)?.pay_json) ?? "{}");
 const base = () => process.env.APP_URL || "http://localhost:3000";
 
 export type Provider = "razorpay" | "payu" | "test";
@@ -25,6 +28,7 @@ export async function createPaymentLink(orderId: string): Promise<string> {
   if (!o) throw new Error("Order not found");
   if (o.payment_link && o.status === "pending") return o.payment_link;
   const provider = activeProvider(o.workspace_id);
+  if (provider === "test" && !devToolsEnabled()) throw new HttpError(409, "Connect Razorpay or PayU in Settings to take payments");
   const c = payCfg(o.workspace_id);
   let url = `${base()}/pay/${o.id}`; // PayU + test use our hosted page
   let ref: string | null = null;
@@ -40,7 +44,7 @@ export async function createPaymentLink(orderId: string): Promise<string> {
       signal: AbortSignal.timeout(15_000),
     });
     const d: any = await res.json().catch(() => ({}));
-    if (!res.ok) throw Object.assign(new Error(d?.error?.description || `Razorpay error ${res.status}`), { permanent: true });
+    if (!res.ok) throw new HttpError(502, d?.error?.description || `Razorpay error ${res.status}`);
     url = d.short_url; ref = d.id;
   }
   run("UPDATE orders SET provider=?, payment_link=?, payment_ref=COALESCE(?,payment_ref) WHERE id=?", provider, url, ref, orderId);

@@ -1,9 +1,11 @@
 import { requireSession } from "@/lib/auth";
 import { handle, json } from "@/lib/http";
+import { devToolsEnabled } from "@/lib/env";
 import { ingestLeadFields } from "@/lib/metaleads";
 
 /** Simulates a Meta lead-form submission without needing a real ad. */
 export const POST = handle(async (req: Request) => {
+  if (!devToolsEnabled()) return json({ error: "Not found" }, 404);
   const s = await requireSession();
   const b = await req.json();
   const c = ingestLeadFields(s.workspaceId, [

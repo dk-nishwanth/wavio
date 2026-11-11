@@ -9,11 +9,13 @@ for (const f of [".env.local", ".env"]) {
 async function main() {
   const { processDue } = await import("./lib/queue");
   const { tickScheduler } = await import("./lib/jobs");
+  const { maintenance } = await import("./lib/maintenance");
 
   console.log("worker started");
   for (;;) {
     try {
       tickScheduler();
+      maintenance();
       const n = await processDue(50);
       if (n) console.log(`processed ${n} job(s)`);
     } catch (e) {

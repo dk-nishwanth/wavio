@@ -21,9 +21,10 @@ export default function Settings() {
         <label>Meta app secret (verifies webhook signatures) {data?.hasAppSecret && <span className="pill ok">saved</span>}</label><input type="password" value={f.appSecret} onChange={set("appSecret")} />
         <button className="btn mt" onClick={async () => { await api("/api/settings", "PUT", f); setF({ phoneNumberId: "", wabaId: "", token: "", appSecret: "" }); setMsg("Saved"); reload(); }}>Save</button> <span className="muted">{msg}</span>
       </div>
+      <AccountCard />
       {data && <BusinessCard data={data} reload={reload} />}
       {data && <PaymentsCard data={data.payments} reload={reload} />}
-      {data && <MetaCard data={data.meta} reload={reload} />}
+      {data && <MetaCard data={data.meta} reload={reload} devTools={data.devTools} />}
       {data && <IntegrationsCard data={data.integrations} reload={reload} />}
       {data && <TestCard disabled={data.mock} />}
       {data && <div className="card mt" style={{ maxWidth: 620 }}>
@@ -59,7 +60,7 @@ function PaymentsCard({ data, reload }: { data: any; reload: () => void }) {
   );
 }
 
-function MetaCard({ data, reload }: { data: any; reload: () => void }) {
+function MetaCard({ data, reload, devTools }: { data: any; reload: () => void; devTools: boolean }) {
   const [token, setToken] = useState(""); const [t, setT] = useState({ name: "", phone: "" }); const [msg, setMsg] = useState("");
   return (
     <div className="card mt" style={{ maxWidth: 620 }}>
@@ -68,10 +69,10 @@ function MetaCard({ data, reload }: { data: any; reload: () => void }) {
       <label>Leads webhook URL (verify token is the same as WhatsApp)</label><input readOnly value={data.leadsWebhookUrl} onFocus={(e) => e.target.select()} />
       <label>Page access token {data.hasPageToken && <span className="pill ok">saved</span>}</label>
       <div className="row"><input type="password" value={token} onChange={(e) => setToken(e.target.value)} /><button className="btn" onClick={async () => { await api("/api/settings", "PUT", { metaPageToken: token }); setToken(""); reload(); }}>Save</button></div>
-      <h2 style={{ marginTop: 16 }}>Try it without an ad</h2>
+      {devTools && <><h2 style={{ marginTop: 16 }}>Try it without an ad</h2>
       <div className="row"><input placeholder="Name" value={t.name} onChange={(e) => setT({ ...t, name: e.target.value })} /><input placeholder="Phone" value={t.phone} onChange={(e) => setT({ ...t, phone: e.target.value })} />
         <button className="btn ghost" onClick={async () => { try { await api("/api/dev/lead", "POST", t); setMsg("Lead created — see Leads"); } catch (e: any) { setMsg(e.message); } }}>Simulate lead form</button></div>
-      <p className="muted small">{msg}</p>
+      <p className="muted small">{msg}</p></>}
     </div>
   );
 }
@@ -131,6 +132,18 @@ function TestCard({ disabled }: { disabled: boolean }) {
         {r.messageId && <div className="small">Test message sent. If it doesn&apos;t arrive, the number isn&apos;t on your recipient list yet.</div>}
         <div className="small">Webhook: {r.webhookLastSeen ? "last event received " + new Date(r.webhookLastSeen).toLocaleString() : "no events received yet — finish the webhook step"}</div>
       </div>)}
+    </div>
+  );
+}
+
+function AccountCard() {
+  const [f, setF] = useState({ current: "", next: "" }); const [msg, setMsg] = useState("");
+  return (
+    <div className="card mt" style={{ maxWidth: 620 }}>
+      <h2>Your account</h2>
+      <div className="row"><div className="grow"><label>Current password</label><input type="password" value={f.current} onChange={(e) => setF({ ...f, current: e.target.value })} /></div>
+        <div className="grow"><label>New password (8+ characters)</label><input type="password" value={f.next} onChange={(e) => setF({ ...f, next: e.target.value })} /></div></div>
+      <div className="row mt"><button className="btn" disabled={!f.current || f.next.length < 8} onClick={async () => { try { await api("/api/auth/password", "POST", f); setF({ current: "", next: "" }); setMsg("Password changed. Other devices were signed out."); } catch (e: any) { setMsg(e.message); } }}>Change password</button><span className="muted small">{msg}</span></div>
     </div>
   );
 }

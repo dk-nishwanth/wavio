@@ -1,10 +1,12 @@
 import crypto from "node:crypto";
 import { id, now, run, get } from "@/lib/db";
-import { hashPassword, makeSession } from "@/lib/auth";
+import { COOKIE, hashPassword, makeSession } from "@/lib/auth";
+import { clientIp, hit } from "@/lib/ratelimit";
 import { handle, json } from "@/lib/http";
 import { createKey } from "@/lib/apikeys";
 
 export const POST = handle(async (req: Request) => {
+  if (!hit(`signup:${clientIp(req)}`, 5, 3600_000).ok) return json({ error: "Too many sign-ups from this address. Try later." }, 429);
   const { name, email, password, workspace } = await req.json();
   if (!email || !password || password.length < 8) return json({ error: "Email and a password of 8+ characters are required" }, 400);
   if (get("SELECT 1 FROM users WHERE email=?", String(email).toLowerCase())) return json({ error: "Email already registered" }, 409);
@@ -15,6 +17,6 @@ export const POST = handle(async (req: Request) => {
   createKey(ws, "public", "Website (public)");
   createKey(ws, "secret", "Server (secret)");
   const res = json({ ok: true });
-  res.cookies.set("session", makeSession(uid), { httpOnly: true, sameSite: "lax", path: "/", maxAge: 14 * 86400, secure: process.env.NODE_ENV === "production" });
+  res.cookies.set("session", makeSession(uid, 0), COOKIE);
   return res;
 });

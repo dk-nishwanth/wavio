@@ -101,6 +101,7 @@ CREATE TABLE IF NOT EXISTS orders (
   created_at INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_orders_ws ON orders(workspace_id, created_at);
+CREATE TABLE IF NOT EXISTS rate_limits (key TEXT PRIMARY KEY, count INTEGER NOT NULL, reset_at INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS invoices (
   id TEXT PRIMARY KEY, workspace_id TEXT NOT NULL, number TEXT NOT NULL, plan TEXT NOT NULL, period TEXT NOT NULL,
   extra_seats INTEGER NOT NULL DEFAULT 0, base REAL NOT NULL, gst REAL NOT NULL, total REAL NOT NULL,
@@ -108,6 +109,18 @@ CREATE TABLE IF NOT EXISTS invoices (
   created_at INTEGER NOT NULL, paid_at INTEGER
 );
 `;
+
+import { encrypt } from "./crypto";
+
+/** One-time upgrade: secrets saved before encryption existed are encrypted in place. */
+function encryptLegacySecrets(d: DatabaseSync) {
+  for (const w of d.prepare("SELECT id, wa_token, wa_app_secret, pay_json, meta_json FROM workspaces").all() as any[]) {
+    for (const col of ["wa_token", "wa_app_secret", "pay_json", "meta_json"]) {
+      const v = w[col] as string | null;
+      if (v && !v.startsWith("enc1:")) d.prepare(`UPDATE workspaces SET ${col}=? WHERE id=?`).run(encrypt(v), w.id);
+    }
+  }
+}
 
 const g = globalThis as unknown as { __db?: DatabaseSync };
 
@@ -125,7 +138,13 @@ export function db(): DatabaseSync {
     try { d.exec("ALTER TABLE workspaces ADD COLUMN plan_until INTEGER"); } catch { /* column already exists */ }
     try { d.exec("ALTER TABLE workspaces ADD COLUMN extra_seats INTEGER NOT NULL DEFAULT 0"); } catch { /* column already exists */ }
     try { d.exec("ALTER TABLE workspaces ADD COLUMN billing_json TEXT"); } catch { /* column already exists */ }
+    try { d.exec("ALTER TABLE users ADD COLUMN session_version INTEGER NOT NULL DEFAULT 0"); } catch { /* exists */ }
+    try { d.exec("ALTER TABLE messages ADD COLUMN media_path TEXT"); } catch { /* exists */ }
+    try { d.exec("ALTER TABLE messages ADD COLUMN media_mime TEXT"); } catch { /* exists */ }
+    try { d.exec("ALTER TABLE messages ADD COLUMN media_name TEXT"); } catch { /* exists */ }
+    try { d.exec("ALTER TABLE messages ADD COLUMN media_id TEXT"); } catch { /* exists */ }
     g.__db = d;
+    encryptLegacySecrets(d);
   }
   return g.__db;
 }

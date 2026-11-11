@@ -2,6 +2,8 @@ import crypto from "node:crypto";
 import { get } from "@/lib/db";
 import { applyStatus, receiveInbound } from "@/lib/core";
 import { handle, json } from "@/lib/http";
+import { decrypt } from "@/lib/crypto";
+import { isProd } from "@/lib/env";
 import { metaCfg, saveMetaCfg } from "@/lib/metaleads";
 
 type Ctx = { params: Promise<{ ws: string }> };
@@ -22,8 +24,10 @@ export const POST = handle(async (req: Request, { params }: Ctx) => {
   const w = get<any>("SELECT * FROM workspaces WHERE id=?", ws);
   if (!w) return json({ error: "Unknown workspace" }, 404);
   const raw = await req.text();
-  if (w.wa_app_secret) {
-    const expected = "sha256=" + crypto.createHmac("sha256", w.wa_app_secret).update(raw).digest("hex");
+  const appSecret = decrypt(w.wa_app_secret);
+  if (isProd() && !appSecret) return json({ error: "App secret not configured" }, 401);
+  if (appSecret) {
+    const expected = "sha256=" + crypto.createHmac("sha256", appSecret).update(raw).digest("hex");
     const got = req.headers.get("x-hub-signature-256") ?? "";
     if (got.length !== expected.length || !crypto.timingSafeEqual(Buffer.from(got), Buffer.from(expected))) return json({ error: "Bad signature" }, 401);
   }
@@ -38,8 +42,12 @@ export const POST = handle(async (req: Request, { params }: Ctx) => {
         const nfm = m.interactive?.nfm_reply;
         let flowResponse: Record<string, any> | undefined;
         if (nfm?.response_json) { try { flowResponse = JSON.parse(nfm.response_json); } catch { /* ignore malformed */ } }
-        const text = nfm ? "Submitted a form" : m.text?.body ?? m.button?.text ?? m.interactive?.button_reply?.title ?? m.interactive?.list_reply?.title ?? `[${m.type}]`;
-        receiveInbound(ws, { phone: m.from, name: names[m.from] }, { waId: m.id, type: m.type, text, referral: m.referral, flowResponse });
+        const mediaObj = m[m.type];
+        const isMedia = ["image", "video", "audio", "document", "sticker", "voice"].includes(m.type) && mediaObj?.id;
+        const loc = m.type === "location" ? m.location : null;
+        const text = loc ? `📍 ${loc.name ?? "Location"}${loc.address ? ` — ${loc.address}` : ""} https://maps.google.com/?q=${loc.latitude},${loc.longitude}`
+          : isMedia ? (mediaObj.caption || `[${m.type}]`) : nfm ? "Submitted a form" : m.text?.body ?? m.button?.text ?? m.interactive?.button_reply?.title ?? m.interactive?.list_reply?.title ?? `[${m.type}]`;
+        receiveInbound(ws, { phone: m.from, name: names[m.from] }, { waId: m.id, type: m.type, text, referral: m.referral, flowResponse, media: isMedia ? { id: mediaObj.id, mime: mediaObj.mime_type, name: mediaObj.filename } : undefined });
       }
       for (const s of v.statuses ?? []) applyStatus(s.id, s.status, s.errors?.[0]?.title);
     }

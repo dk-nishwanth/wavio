@@ -1,5 +1,7 @@
 import { get, run } from "@/lib/db";
 import { requireSession } from "@/lib/auth";
+import { decrypt, encrypt } from "@/lib/crypto";
+import { devToolsEnabled } from "@/lib/env";
 import { activeProvider, payCfg } from "@/lib/payments";
 import { metaCfg, saveMetaCfg } from "@/lib/metaleads";
 import { getBusiness, getIndustry, saveIndustry } from "@/lib/industry";
@@ -10,7 +12,7 @@ export const GET = handle(async () => {
   const w = get<any>("SELECT * FROM workspaces WHERE id=?", s.workspaceId)!;
   const base = process.env.APP_URL || "http://localhost:3000";
   return json({
-    name: w.name, phoneNumberId: w.wa_phone_number_id, wabaId: w.wa_waba_id, hasToken: !!w.wa_token, hasAppSecret: !!w.wa_app_secret,
+    name: w.name, phoneNumberId: w.wa_phone_number_id, wabaId: w.wa_waba_id, hasToken: !!w.wa_token, hasAppSecret: !!w.wa_app_secret, devTools: devToolsEnabled(),
     verifyToken: w.wa_verify_token,
     industry: getIndustry(s.workspaceId), business: getBusiness(s.workspaceId),
     integrations: { hasCalSecret: !!metaCfg(s.workspaceId).calcom_secret, calUrl: `${base}/api/integrations/calcom/${w.id}`, zohoConnected: !!metaCfg(s.workspaceId).zoho?.refresh_token, zohoRegion: metaCfg(s.workspaceId).zoho?.region ?? "in" },
@@ -24,7 +26,7 @@ export const PUT = handle(async (req: Request) => {
   const b = await req.json();
   run(
     "UPDATE workspaces SET name=COALESCE(?,name), wa_phone_number_id=COALESCE(?,wa_phone_number_id), wa_waba_id=COALESCE(?,wa_waba_id), wa_token=COALESCE(?,wa_token), wa_app_secret=COALESCE(?,wa_app_secret) WHERE id=?",
-    b.name || null, b.phoneNumberId || null, b.wabaId || null, b.token || null, b.appSecret || null, s.workspaceId,
+    b.name || null, b.phoneNumberId || null, b.wabaId || null, encrypt(b.token?.trim() || null), encrypt(b.appSecret?.trim() || null), s.workspaceId,
   );
   if (b.industry) saveIndustry(s.workspaceId, b.industry === "resort" ? "resort" : "general", b.business);
   if (b.metaPageToken) saveMetaCfg(s.workspaceId, { ...metaCfg(s.workspaceId), page_token: String(b.metaPageToken).trim() });
@@ -37,7 +39,7 @@ export const PUT = handle(async (req: Request) => {
     for (const k of ["razorpay_key_id", "razorpay_key_secret", "razorpay_webhook_secret", "payu_key", "payu_salt", "payu_mode"]) if (p[k]) cur[k] = p[k].trim();
     if (p.clear === "razorpay") for (const k of ["razorpay_key_id", "razorpay_key_secret", "razorpay_webhook_secret"]) delete cur[k];
     if (p.clear === "payu") for (const k of ["payu_key", "payu_salt"]) delete cur[k];
-    run("UPDATE workspaces SET pay_json=? WHERE id=?", JSON.stringify(cur), s.workspaceId);
+    run("UPDATE workspaces SET pay_json=? WHERE id=?", encrypt(JSON.stringify(cur)), s.workspaceId);
   }
   return json({ ok: true });
 });

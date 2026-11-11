@@ -1,11 +1,12 @@
 import { get, run } from "./db";
+import { decrypt, encrypt } from "./crypto";
 import { upsertContact } from "./core";
 import { ingestEvent } from "./events";
 import { logActivity, touchLead } from "./crm";
 
 export type MetaCfg = { last_webhook_at?: number; industry?: string; business?: { name?: string; location?: string; check_in_time?: string; check_out_time?: string }; page_token?: string; calcom_secret?: string; zoho?: { client_id: string; client_secret: string; refresh_token: string; region: string } };
-export const metaCfg = (ws: string): MetaCfg => JSON.parse(get<any>("SELECT meta_json FROM workspaces WHERE id=?", ws)?.meta_json ?? "{}");
-export const saveMetaCfg = (ws: string, c: MetaCfg) => run("UPDATE workspaces SET meta_json=? WHERE id=?", JSON.stringify(c), ws);
+export const metaCfg = (ws: string): MetaCfg => JSON.parse(decrypt(get<any>("SELECT meta_json FROM workspaces WHERE id=?", ws)?.meta_json) ?? "{}");
+export const saveMetaCfg = (ws: string, c: MetaCfg) => run("UPDATE workspaces SET meta_json=? WHERE id=?", encrypt(JSON.stringify(c)), ws);
 
 /** Turns Meta Lead Ad "field_data" into a contact. Meta's form field names vary, so match loosely. */
 export function contactFromFields(fields: { name: string; values: string[] }[]) {

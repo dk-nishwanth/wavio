@@ -18,7 +18,7 @@ export default function Team() {
       </div>
       <div className="card" style={{ padding: 0 }}><table><thead><tr><th>Name</th><th>Login</th><th>Role</th><th>Added</th><th /></tr></thead>
         <tbody>{data?.map((u) => <tr key={u.id}><td>{u.name}</td><td>{u.email}</td><td><span className="pill">{u.role}</span></td><td className="muted">{when(u.created_at)}</td>
-          <td><a className="small muted" style={{ cursor: "pointer" }} onClick={async () => { if (confirm(`Remove ${u.name}?`)) { try { await api(`/api/team/${u.id}`, "DELETE"); reload(); } catch (e: any) { setErr(e.message); } } }}>remove</a></td></tr>)}</tbody></table></div>
+          <td><a className="small muted" style={{ cursor: "pointer", marginRight: 12 }} onClick={async () => { const pw = prompt(`New password for ${u.name} (8+ characters). They will be signed out everywhere.`); if (pw) { try { await api(`/api/team/${u.id}/password`, "POST", { password: pw }); alert("Password updated"); } catch (e: any) { setErr(e.message); } } }}>reset password</a><a className="small muted" style={{ cursor: "pointer" }} onClick={async () => { if (confirm(`Remove ${u.name}?`)) { try { await api(`/api/team/${u.id}`, "DELETE"); reload(); } catch (e: any) { setErr(e.message); } } }}>remove</a></td></tr>)}</tbody></table></div>
     </>
   );
 }

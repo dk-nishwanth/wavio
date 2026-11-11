@@ -1,6 +1,8 @@
 import crypto from "node:crypto";
 import { get } from "@/lib/db";
 import { handle, json } from "@/lib/http";
+import { decrypt } from "@/lib/crypto";
+import { isProd } from "@/lib/env";
 import { handleLeadgen } from "@/lib/metaleads";
 
 type Ctx = { params: Promise<{ ws: string }> };
@@ -20,8 +22,10 @@ export const POST = handle(async (req: Request, { params }: Ctx) => {
   const w = get<any>("SELECT * FROM workspaces WHERE id=?", ws);
   if (!w) return json({ error: "Unknown workspace" }, 404);
   const raw = await req.text();
-  if (w.wa_app_secret) {
-    const exp = "sha256=" + crypto.createHmac("sha256", w.wa_app_secret).update(raw).digest("hex");
+  const appSecret = decrypt(w.wa_app_secret);
+  if (isProd() && !appSecret) return json({ error: "App secret not configured" }, 401);
+  if (appSecret) {
+    const exp = "sha256=" + crypto.createHmac("sha256", appSecret).update(raw).digest("hex");
     const got = req.headers.get("x-hub-signature-256") ?? "";
     if (got.length !== exp.length || !crypto.timingSafeEqual(Buffer.from(got), Buffer.from(exp))) return json({ error: "Bad signature" }, 401);
   }

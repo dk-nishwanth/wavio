@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 import { get, id, now, run } from "./db";
 import { HttpError, sha256 } from "./auth";
+import { hit } from "./ratelimit";
 
 export function createKey(ws: string, kind: "public" | "secret", label: string, origins: string[] = []) {
   const raw = (kind === "public" ? "pk_live_" : "sk_live_") + crypto.randomBytes(24).toString("base64url");
@@ -24,6 +25,7 @@ export function authApiKey(req: Request, allow: ("public" | "secret")[]) {
   if (!h) throw new HttpError(401, "Missing API key");
   const key = get<any>("SELECT * FROM api_keys WHERE key_hash=?", sha256(h));
   if (!key) throw new HttpError(401, "Invalid API key");
+  if (!hit(`api:${key.id}`, 600, 60_000).ok) throw new HttpError(429, "Rate limit exceeded: 600 requests per minute per key");
   if (!allow.includes(key.kind)) throw new HttpError(403, `A ${key.kind} key cannot call this endpoint`);
   if (key.kind === "public") {
     const origins: string[] = JSON.parse(key.allowed_origins);

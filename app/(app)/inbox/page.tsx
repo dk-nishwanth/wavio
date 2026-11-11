@@ -11,6 +11,9 @@ export default function Inbox() {
   const list = useApi<any[]>(`/api/conversations?filter=${filter}&q=${encodeURIComponent(q)}`, 3000);
   const chat = useApi<any>(sel ? `/api/conversations/${sel}` : null, 2500);
   const tpls = useApi<any[]>("/api/templates");
+  const settings = useApi<any>("/api/settings");
+  const [file, setFile] = useState<File | null>(null);
+  const fileInput = useRef<HTMLInputElement>(null);
   const [text, setText] = useState(""); const [note, setNote] = useState(false); const [err, setErr] = useState("");
   const [tpl, setTpl] = useState(""); const [tplParams, setTplParams] = useState("");
   const c0: string | null = chat.data?.conversation?.contact_id ?? null;
@@ -25,6 +28,13 @@ export default function Inbox() {
   async function send() {
     setErr("");
     try {
+      if (file) {
+        const form = new FormData(); form.append("file", file); form.append("caption", text);
+        const res = await fetch(`/api/conversations/${sel}/media`, { method: "POST", body: form });
+        const d = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(d.error || "Upload failed");
+        setFile(null); setText(""); chat.reload(); list.reload(); return;
+      }
       if (tpl) await api(`/api/conversations/${sel}/messages`, "POST", { template: tpl, params: tplParams ? tplParams.split("|").map((x) => x.trim()) : [] });
       else await api(`/api/conversations/${sel}/messages`, "POST", { text, note });
       setText(""); setTpl(""); setTplParams(""); chat.reload(); list.reload();
@@ -51,12 +61,12 @@ export default function Inbox() {
           </div>
         ))}
         {list.data?.length === 0 && <p className="muted" style={{ padding: 14 }}>No conversations yet. Use the simulator below, or connect WhatsApp in Settings.</p>}
-        <details style={{ padding: 10 }}>
+        {settings.data?.devTools && <details style={{ padding: 10 }}>
           <summary className="small muted">Simulate an inbound message</summary>
           <label>Phone</label><input value={sim.phone} onChange={(e) => setSim({ ...sim, phone: e.target.value })} placeholder="919876543210" />
           <label>Text</label><input value={sim.text} onChange={(e) => setSim({ ...sim, text: e.target.value })} />
           <button className="btn mt" onClick={async () => { await api("/api/dev/simulate", "POST", sim); list.reload(); }}>Simulate</button>
-        </details>
+        </details>}
       </div>
 
       <div className="chat">
@@ -74,7 +84,15 @@ export default function Inbox() {
           <div className="msgs">
             {chat.data.messages.map((m: any) => (
               <div key={m.id} className={"b " + (m.is_note ? "note" : m.direction)}>
-                {m.is_note ? "📝 " : ""}{m.body}
+                {(m.media_id || m.media_path) && (() => {
+                  const src = `/api/media/${m.id}`;
+                  if (!m.media_path) return <div className="muted small">Downloading attachment…</div>;
+                  if (m.type === "image" || m.type === "sticker") return <a href={src} target="_blank" rel="noreferrer"><img src={src} alt="" style={{ maxWidth: 260, maxHeight: 260, borderRadius: 8, display: "block" }} /></a>;
+                  if (m.type === "video") return <video src={src} controls style={{ maxWidth: 260, borderRadius: 8 }} />;
+                  if (m.type === "audio" || m.type === "voice") return <audio src={src} controls style={{ maxWidth: 260 }} />;
+                  return <a href={src} className="pill" style={{ margin: 0 }}>📄 {m.media_name || "Document"}</a>;
+                })()}
+                {m.is_note ? "📝 " : ""}{m.body && !/^\[(image|video|audio|document|sticker|voice)\]$/.test(m.body) ? m.body : ""}
                 <small>{m.template_name ? `template · ${m.template_name} · ` : ""}{when(m.created_at)} {m.direction === "out" && !m.is_note ? tick[m.status] : ""}{m.error ? ` — ${m.error}` : ""}</small>
               </div>
             ))}
@@ -89,10 +107,12 @@ export default function Inbox() {
               </select>
               {tpl && <input style={{ flex: 1 }} placeholder="Variables separated by |  e.g. Asha | #1042" value={tplParams} onChange={(e) => setTplParams(e.target.value)} />}
             </div>
+            {file && <div className="row small mt"><span className="pill">📎 {file.name}</span><a className="muted" style={{ cursor: "pointer" }} onClick={() => setFile(null)}>remove</a></div>}
             {!tpl && <div className="row mt"><textarea rows={2} value={text} onChange={(e) => setText(e.target.value)} placeholder={note ? "Internal note (not sent)" : "Type a message"} onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }} /></div>}
             <div className="row between mt">
-              <label className="row small" style={{ margin: 0 }}><input type="checkbox" style={{ width: "auto" }} checked={note} onChange={(e) => setNote(e.target.checked)} /> Internal note</label>
-              <button className="btn" onClick={send} disabled={!tpl && !text.trim()}>{note ? "Add note" : "Send"}</button>
+              <div className="row"><input ref={fileInput} type="file" hidden accept="image/jpeg,image/png,image/webp,video/mp4,audio/mpeg,audio/ogg,audio/aac,audio/mp4,application/pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt" onChange={(e) => { setFile(e.target.files?.[0] ?? null); e.target.value = ""; }} /><button className="btn ghost" type="button" onClick={() => fileInput.current?.click()} disabled={!!tpl || note}>📎 Attach</button>
+              <label className="row small" style={{ margin: 0 }}><input type="checkbox" style={{ width: "auto" }} checked={note} onChange={(e) => setNote(e.target.checked)} /> Internal note</label></div>
+              <button className="btn" onClick={send} disabled={!tpl && !file && !text.trim()}>{note ? "Add note" : "Send"}</button>
             </div>
           </div>
         </>)}

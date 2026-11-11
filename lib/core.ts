@@ -1,4 +1,5 @@
 import crypto from "node:crypto";
+import fs from "node:fs";
 import { all, get, id, now, run } from "./db";
 import { HttpError } from "./auth";
 import { enqueue } from "./queue";
@@ -119,6 +120,22 @@ export function queueTemplate(ws: string, contactId: string, templateName: strin
   return mid;
 }
 
+/** Sends a file the agent uploaded. Needs the 24-hour window like any free-form message. */
+export function queueMedia(ws: string, contactId: string, f: { kind: string; path: string; mime: string; name: string; caption?: string }) {
+  const contact = get<Contact>("SELECT * FROM contacts WHERE id=? AND workspace_id=?", contactId, ws);
+  if (!contact) throw new HttpError(404, "Contact not found");
+  if (!contact.opted_in) throw new HttpError(409, "Contact has opted out");
+  const conv = ensureConversation(ws, contactId);
+  if (!windowOpen(conv)) throw new HttpError(409, "Outside the 24-hour window — send an approved template instead");
+  const mid = id("m_");
+  run("INSERT INTO messages (id, workspace_id, conversation_id, contact_id, direction, type, body, status, media_path, media_mime, media_name, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+    mid, ws, conv.id, contactId, "out", f.kind, f.caption ?? "", "queued", f.path, f.mime, f.name, now());
+  run("UPDATE conversations SET bot_paused=1 WHERE id=?", conv.id);
+  touchConversation(conv.id, f.caption || `[${f.kind}] ${f.name}`, false);
+  enqueue("send_message", { messageId: mid }, { workspaceId: ws });
+  return mid;
+}
+
 export function queueButtons(ws: string, contactId: string, text: string, buttons: string[]) {
   const conv = ensureConversation(ws, contactId);
   if (!windowOpen(conv)) throw Object.assign(new HttpError(409, "Outside the 24-hour window"), { permanent: true });
@@ -156,6 +173,11 @@ export async function deliverMessage(messageId: string) {
     if (m.type === "template") {
       const tpl = get<any>("SELECT language FROM templates WHERE workspace_id=? AND name=?", m.workspace_id, m.template_name);
       waId = await wa.sendTemplate(cfg, contact.phone, m.template_name, tpl?.language ?? "en", params);
+    } else if (["image", "video", "audio", "document"].includes(m.type)) {
+      const { resolveMedia } = await import("./media");
+      const bytes = fs.readFileSync(resolveMedia(m.media_path));
+      const mediaId = await wa.uploadMedia(cfg, bytes, m.media_mime, m.media_name || "file");
+      waId = await wa.sendMedia(cfg, contact.phone, m.type, mediaId, { caption: m.body, filename: m.media_name });
     } else if (m.type === "flow") {
       waId = await wa.sendFlow(cfg, contact.phone, { text: m.body, flowId: params.flowId, cta: params.cta || "Open", screen: params.screen, token: m.id });
     } else if (m.type === "buttons") {
@@ -187,7 +209,7 @@ export function applyStatus(waId: string, status: string, error?: string) {
 export function receiveInbound(
   ws: string,
   from: { phone: string; name?: string },
-  msg: { waId?: string; type: string; text: string; flowResponse?: Record<string, any>; referral?: { headline?: string; source_url?: string; source_id?: string } },
+  msg: { waId?: string; type: string; text: string; media?: { id: string; mime?: string; name?: string }; flowResponse?: Record<string, any>; referral?: { headline?: string; source_url?: string; source_id?: string } },
 ) {
   if (msg.waId && get("SELECT 1 FROM messages WHERE wa_message_id=?", msg.waId)) return; // Meta retries webhooks
   const isNew = !get("SELECT 1 FROM contacts WHERE workspace_id=? AND phone=?", ws, normalizePhone(from.phone));
@@ -198,9 +220,10 @@ export function receiveInbound(
   const firstEver = !get("SELECT 1 FROM messages WHERE conversation_id=? AND direction='in'", conv.id);
   const mid = id("m_");
   run(
-    "INSERT INTO messages (id, workspace_id, conversation_id, contact_id, direction, type, body, wa_message_id, status, created_at) VALUES (?,?,?,?,?,?,?,?,?,?)",
-    mid, ws, conv.id, contact.id, "in", msg.type, msg.text, msg.waId ?? null, "received", now(),
+    "INSERT INTO messages (id, workspace_id, conversation_id, contact_id, direction, type, body, wa_message_id, status, media_id, media_mime, media_name, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+    mid, ws, conv.id, contact.id, "in", msg.type, msg.text, msg.waId ?? null, "received", msg.media?.id ?? null, msg.media?.mime ?? null, msg.media?.name ?? null, now(),
   );
+  if (msg.media?.id) enqueue("fetch_media", { messageId: mid }, { workspaceId: ws });
   touchConversation(conv.id, msg.text, true);
   touchLead(ws, contact.id, msg.referral ? "click_to_whatsapp_ad" : "whatsapp");
   if (msg.referral) {

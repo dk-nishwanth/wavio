@@ -1,6 +1,7 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
 import { api } from "./api";
 
 const I = {
@@ -27,6 +28,28 @@ const groups: { title: string; links: [string, string, keyof typeof I][] }[] = [
 export default function Nav({ name, terms }: { name: string; terms: { catalog: string; orders: string } }) {
   const label = (l: string) => (l === "Catalog" ? terms.catalog : l === "Orders" ? terms.orders : l);
   const path = usePathname();
+  const [unread, setUnread] = useState(0);
+  const [perm, setPerm] = useState<string>("default");
+  const prev = useRef<number | null>(null);
+  useEffect(() => {
+    setPerm(typeof Notification === "undefined" ? "unsupported" : Notification.permission);
+    let stop = false;
+    const tick = async () => {
+      try {
+        const s = await api<{ unread: number }>("/api/stats");
+        if (stop) return;
+        setUnread(s.unread);
+        document.title = (s.unread > 0 ? `(${s.unread}) ` : "") + "Wavio";
+        if (prev.current !== null && s.unread > prev.current && typeof Notification !== "undefined" && Notification.permission === "granted" && document.hidden) {
+          new Notification("New WhatsApp message", { body: `${s.unread} conversation${s.unread > 1 ? "s" : ""} waiting for a reply`, icon: "/logo-mark.svg", tag: "wavio-unread" });
+        }
+        prev.current = s.unread;
+      } catch { /* signed out or offline: try again next tick */ }
+    };
+    tick();
+    const t = setInterval(tick, 8000);
+    return () => { stop = true; clearInterval(t); };
+  }, []);
   return (
     <nav className="side">
       <div className="brand"><img src="/logo-mark.svg" alt="" />wavio</div>
@@ -35,12 +58,13 @@ export default function Nav({ name, terms }: { name: string; terms: { catalog: s
           <div className="grp">{g.title}</div>
           {g.links.map(([href, l, icon]) => (
             <Link key={href} href={href} className={"nav" + (path.startsWith(href) ? " on" : "")}>
-              <svg viewBox="0 0 24 24">{I[icon]}</svg>{label(l)}
+              <svg viewBox="0 0 24 24">{I[icon]}</svg>{label(l)}{href === "/inbox" && unread > 0 && <span className="dot" style={{ marginLeft: "auto" }}>{unread}</span>}
             </Link>
           ))}
         </div>
       ))}
       <div style={{ flex: 1 }} />
+      {perm === "default" && <button className="btn ghost small" style={{ marginBottom: 8, justifyContent: "center" }} onClick={async () => setPerm(await Notification.requestPermission())}>Turn on desktop alerts</button>}
       <div className="me">
         <div className="avatar">{name.slice(0, 1).toUpperCase()}</div>
         <div className="grow" style={{ minWidth: 0 }}>
