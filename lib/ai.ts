@@ -11,7 +11,7 @@ import { ensureConversation, queueAsset, queueButtons, queueCtaUrl, queueList, q
 
 export type Agent = {
   id: string; workspace_id: string; name: string; mode: string; instructions: string; greeting: string; model: string | null; temperature: number;
-  enabled: number; auto_reply: number; actions: string; monthly_credit_limit: number | null;
+  enabled: number; auto_reply: number; actions: string; monthly_credit_limit: number | null; engine: "rules" | "ai" | "hybrid";
 };
 
 export const ALL_ACTIONS = ["send_file", "send_location", "send_menu", "quick_replies", "save_details", "create_request", "my_bookings", "send_payment_link", "add_tag", "set_stage", "handoff_to_human"] as const;
@@ -48,7 +48,7 @@ const TOOL_DEFS: Record<string, Tool> = {
 };
 
 export type Step = { tool: string; input: any; ok: boolean; result: string };
-type Ctx = { ws: string; contactId: string | null; dry: boolean; escalated: boolean };
+export type Ctx = { ws: string; contactId: string | null; dry: boolean; escalated: boolean };
 
 const clip = (v: unknown, n = 200) => String(v ?? "").replace(/[\u0000-\u001f]+/g, " ").trim().slice(0, n);
 const isIso = (s: unknown): s is string => typeof s === "string" && /^\d{4}-\d{2}-\d{2}$/.test(s) && !isNaN(new Date(s + "T00:00:00Z").getTime());
@@ -59,7 +59,7 @@ function labelMatch(ws: string, label: string) {
   return rows.find((a) => a.label.toLowerCase() === l) ?? rows.find((a) => a.label.toLowerCase().includes(l) || l.includes(a.label.toLowerCase())) ?? null;
 }
 
-async function runTool(ctx: Ctx, name: string, input: Record<string, any>): Promise<string> {
+export async function runTool(ctx: Ctx, name: string, input: Record<string, any>): Promise<string> {
   const { ws } = ctx;
   const c = ctx.contactId;
   const live = !ctx.dry && !!c;
@@ -260,7 +260,7 @@ export async function runConcierge(ws: string, contactId: string | null, o: { dr
 /** Job: answer a guest message if the concierge is on and it's safe to. Failures hand the chat to a person instead of going silent. */
 export async function answerInbound(ws: string, contactId: string, messageId: string) {
   const a = getAgent(ws);
-  if (!a.enabled || !a.auto_reply || !aiConfigured(ws)) return;
+  if (!a.enabled || !a.auto_reply || (a.engine === "ai" && !aiConfigured(ws))) return;
   const conv = ensureConversation(ws, contactId);
   if (conv.bot_paused || conv.ai_paused || !windowOpen(conv)) return;
   const m = get<any>("SELECT created_at FROM messages WHERE id=?", messageId);
@@ -269,7 +269,17 @@ export async function answerInbound(ws: string, contactId: string, messageId: st
   if (limit && repliesThisMonth(ws) >= limit) return handoff(ws, contactId, "AI reply limit for this month reached");
   if ((get<any>("SELECT COUNT(*) n FROM messages WHERE contact_id=? AND ai=1 AND created_at > ?", contactId, now() - 3600_000)!.n as number) >= 20) return handoff(ws, contactId, "The AI replied 20 times in an hour — a person should take over");
   try {
-    await runConcierge(ws, contactId);
+    if (a.engine === "rules" || (a.engine === "hybrid" && !aiConfigured(ws))) {
+      const { handleGuest } = await import("./hotelbot");
+      const text = get<any>("SELECT body FROM messages WHERE id=?", messageId)?.body ?? "";
+      const r = await handleGuest(ws, contactId, text);
+      if (r.handoff) handoff(ws, contactId, "The hotel bot passed this chat to a person");
+    } else if (a.engine === "hybrid") {
+      const { handleGuest } = await import("./hotelbot");
+      const text = get<any>("SELECT body FROM messages WHERE id=?", messageId)?.body ?? "";
+      const r = await handleGuest(ws, contactId, text, { deferUnknown: true });
+      if (r.unknown) await runConcierge(ws, contactId); // the bot didn't recognise it: let the AI try
+    } else await runConcierge(ws, contactId);
   } catch (e: any) {
     console.error("concierge failed", e);
     handoff(ws, contactId, e instanceof LlmError ? `AI unavailable: ${e.message}` : "The AI concierge hit an error on this message");

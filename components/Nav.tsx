@@ -23,7 +23,7 @@ const I = {
 
 const groups: { title: string; links: [string, string, keyof typeof I][] }[] = [
   { title: "Engage", links: [["/home", "Home", "home"], ["/inbox", "Inbox", "inbox"], ["/requests", "Requests", "inbox2"], ["/contacts", "Contacts", "users"], ["/leads", "Leads", "target"]] },
-  { title: "Grow", links: [["/concierge", "AI Concierge", "bot"], ["/templates", "Templates", "file"], ["/catalog", "Catalog", "bag"], ["/orders", "Orders", "receipt"], ["/campaigns", "Broadcasts", "send"], ["/automations", "Automations", "zap"]] },
+  { title: "Grow", links: [["/concierge", "Guest Bot", "bot"], ["/templates", "Templates", "file"], ["/catalog", "Catalog", "bag"], ["/orders", "Orders", "receipt"], ["/campaigns", "Broadcasts", "send"], ["/automations", "Automations", "zap"]] },
   { title: "Build", links: [["/team", "Team", "users"], ["/billing", "Billing", "card"], ["/developers", "Developers", "code"], ["/settings", "Settings", "cog"]] },
 ];
 

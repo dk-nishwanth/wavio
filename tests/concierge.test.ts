@@ -46,7 +46,7 @@ beforeAll(() => {
   addText(ws, "Policies", "Check-in is at 12 PM and check-out at 11 AM. Cancellation is free up to 7 days before arrival. Airport pickup can be arranged for an extra charge.");
   run("INSERT INTO assets (id, workspace_id, path, mime, name, kind, label, description, created_at) VALUES ('as_1',?,?,?,?,?,?,?,?)", ws, `${ws}/pic.png`, "image/png", "pic.png", "image", "Safari tent photos", "Photos of the tents", now());
   run("UPDATE ai_agents SET enabled=1, auto_reply=1 WHERE workspace_id=?", ws);
-  getAgent(ws); run("UPDATE ai_agents SET enabled=1, auto_reply=1 WHERE workspace_id=?", ws);
+  getAgent(ws); run("UPDATE ai_agents SET enabled=1, auto_reply=1, engine='ai' WHERE workspace_id=?", ws);
 });
 
 describe("knowledge base", () => {

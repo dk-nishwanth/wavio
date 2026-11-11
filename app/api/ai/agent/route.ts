@@ -24,10 +24,10 @@ export const PUT = handle(async (req: Request) => {
   const b = await req.json();
   const a = getAgent(s.workspaceId);
   const actions = Array.isArray(b.actions) ? b.actions.filter((x: string) => (ALL_ACTIONS as readonly string[]).includes(x)) : JSON.parse(a.actions);
-  run(`UPDATE ai_agents SET name=?, mode=?, instructions=?, greeting=?, model=?, temperature=?, enabled=?, auto_reply=?, actions=?, monthly_credit_limit=? WHERE id=?`,
+  run(`UPDATE ai_agents SET name=?, mode=?, instructions=?, greeting=?, model=?, temperature=?, enabled=?, auto_reply=?, actions=?, monthly_credit_limit=?, engine=? WHERE id=?`,
     String(b.name ?? a.name).slice(0, 60), ["support", "sales", "qa"].includes(b.mode) ? b.mode : a.mode, String(b.instructions ?? a.instructions).slice(0, 6000), String(b.greeting ?? a.greeting).slice(0, 500),
     b.model ? String(b.model).slice(0, 80) : null, Math.min(1, Math.max(0, Number(b.temperature ?? a.temperature))), b.enabled ? 1 : 0, b.auto_reply ? 1 : 0, JSON.stringify(actions),
-    b.monthly_credit_limit ? Math.max(1, Math.floor(Number(b.monthly_credit_limit))) : null, a.id);
+    b.monthly_credit_limit ? Math.max(1, Math.floor(Number(b.monthly_credit_limit))) : null, ["rules", "ai", "hybrid"].includes(b.engine) ? b.engine : a.engine, a.id);
   const cfg = metaCfg(s.workspaceId) as any;
   let changed = false;
   if (Array.isArray(b.autoApprove)) { cfg.ai = { ...(cfg.ai ?? {}), auto_approve: b.autoApprove.filter((k: string) => (AUTO_APPROVABLE as string[]).includes(k)) }; changed = true; }

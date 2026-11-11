@@ -134,6 +134,12 @@ CREATE TABLE IF NOT EXISTS requests (
   decided_by TEXT, decision_note TEXT, created_at INTEGER NOT NULL, decided_at INTEGER
 );
 CREATE INDEX IF NOT EXISTS idx_requests_ws ON requests(workspace_id, status, created_at);
+CREATE TABLE IF NOT EXISTS bot_state (
+  contact_id TEXT PRIMARY KEY, workspace_id TEXT NOT NULL, step TEXT, slots TEXT NOT NULL DEFAULT '{}', misses INTEGER NOT NULL DEFAULT 0, updated_at INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS bot_faqs (
+  id TEXT PRIMARY KEY, workspace_id TEXT NOT NULL, keywords TEXT NOT NULL, answer TEXT NOT NULL, asset_label TEXT, enabled INTEGER NOT NULL DEFAULT 1, hits INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL
+);
 CREATE TABLE IF NOT EXISTS assets (
   id TEXT PRIMARY KEY, workspace_id TEXT NOT NULL, path TEXT NOT NULL, mime TEXT NOT NULL, name TEXT NOT NULL, kind TEXT NOT NULL, label TEXT NOT NULL DEFAULT '', description TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL
 );
@@ -196,6 +202,7 @@ export function db(): DatabaseSync {
     try { d.exec("ALTER TABLE templates ADD COLUMN header_media_expires INTEGER"); } catch { /* exists */ }
     try { d.exec("ALTER TABLE campaigns ADD COLUMN var_map TEXT"); } catch { /* exists */ }
     try { d.exec("ALTER TABLE orders ADD COLUMN request_id TEXT"); } catch { /* exists */ }
+    try { d.exec("ALTER TABLE ai_agents ADD COLUMN engine TEXT NOT NULL DEFAULT 'rules'"); } catch { /* exists */ }
     g.__db = d;
     encryptLegacySecrets(d);
   }

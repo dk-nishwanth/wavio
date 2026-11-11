@@ -9,12 +9,12 @@ const ACTION_LABEL: Record<string, string> = {
 const KIND_LABEL: Record<string, string> = { service: "Service requests (pickup, extra bed…)", callback: "Callback requests", other: "Other" };
 
 export default function Concierge() {
-  const [tab, setTab] = useState<"behaviour" | "knowledge" | "library" | "playground">("behaviour");
+  const [tab, setTab] = useState<"behaviour" | "hotel bot" | "knowledge" | "library" | "playground">("behaviour");
   return (
     <>
-      <div className="page-head"><div><h1>AI Concierge</h1><p className="muted" style={{ margin: 0 }}>Guests chat on WhatsApp; the concierge answers from your knowledge, shares photos and location, takes requests, and hands anything it can&apos;t do to your team.</p></div></div>
-      <div className="row mb">{(["behaviour", "knowledge", "library", "playground"] as const).map((t) => <span key={t} className="chip" style={{ cursor: "pointer", textTransform: "capitalize", background: tab === t ? "var(--brand)" : "", color: tab === t ? "var(--on-brand)" : "" }} onClick={() => setTab(t)}>{t}</span>)}</div>
-      {tab === "behaviour" && <Behaviour />}{tab === "knowledge" && <Knowledge />}{tab === "library" && <Library />}{tab === "playground" && <Playground />}
+      <div className="page-head"><div><h1>Guest Bot</h1><p className="muted" style={{ margin: 0 }}>Guests chat on WhatsApp; the bot answers from your rooms, rates and knowledge, shares photos and location, takes bookings and requests for your approval, and hands anything it can&apos;t do to your team.</p></div></div>
+      <div className="row mb">{(["behaviour", "hotel bot", "knowledge", "library", "playground"] as const).map((t) => <span key={t} className="chip" style={{ cursor: "pointer", textTransform: "capitalize", background: tab === t ? "var(--brand)" : "", color: tab === t ? "var(--on-brand)" : "" }} onClick={() => setTab(t)}>{t}</span>)}</div>
+      {tab === "behaviour" && <Behaviour />}{tab === "hotel bot" && <HotelBot />}{tab === "knowledge" && <Knowledge />}{tab === "library" && <Library />}{tab === "playground" && <Playground />}
     </>
   );
 }
@@ -29,17 +29,22 @@ function Behaviour() {
   const save = async (extra: object = {}) => { try { await api("/api/ai/agent", "PUT", { ...a, autoApprove: a.autoApprove, ...extra }); setF(null); setKey(""); setMsg("Saved"); reload(); } catch (e: any) { setMsg(e.message); } };
   return (
     <div style={{ maxWidth: 720 }}>
-      {!data.configured && <div className="banner">The concierge needs an Anthropic API key. Paste one below (or set <code>ANTHROPIC_API_KEY</code> on the server).</div>}
+      <div className="card mb">
+        <h2>How should the bot think?</h2>
+        {([["rules", "Hotel bot — our own (recommended to start)", "No AI service and no key needed. Understands the common hotel requests (rooms and rates, dates, photos, location, timings, pickup, cancellations), asks booking questions step by step, uses your own questions and answers, and hands anything else to your team. Free and predictable."], ["hybrid", "Hotel bot + AI for the rest", "The hotel bot handles what it recognises; anything else goes to the AI (needs an Anthropic key). Falls back to the hotel bot alone if there is no key."], ["ai", "AI only", "The AI handles every message using your knowledge and instructions (needs an Anthropic key; costs per reply)."]] as const).map(([v, t, d]) => (
+          <label key={v} className="row" style={{ alignItems: "flex-start", margin: "6px 0" }}><input type="radio" name="engine" checked={a.engine === v} onChange={() => set({ engine: v })} style={{ marginTop: 4 }} /><span><b style={{ fontWeight: 600 }}>{t}</b><br /><span className="muted small">{d}</span></span></label>))}
+      </div>
+      {a.engine !== "rules" && !data.configured && <div className="banner">This mode needs an Anthropic API key. Paste one below (or set <code>ANTHROPIC_API_KEY</code> on the server).</div>}
       <div className="card mb">
         <div className="row between"><h2>Switch on</h2><span className={"pill " + (a.enabled && a.auto_reply ? "ok" : "warn")}>{a.enabled && a.auto_reply ? "Answering guests" : "Off"}</span></div>
         <label className="row"><input type="checkbox" checked={!!a.enabled} onChange={(e) => set({ enabled: e.target.checked })} /> Concierge enabled</label>
         <label className="row"><input type="checkbox" checked={!!a.auto_reply} onChange={(e) => set({ auto_reply: e.target.checked })} /> Reply automatically to guest messages that no chatbot flow handles</label>
         <p className="muted small">It stops by itself when a team member replies in a chat or it hands the chat over. Use &quot;Resume bot&quot; in the inbox to let it continue.</p>
-        <label>Anthropic API key {data.keySource && <span className="pill ok">{data.keySource === "workspace" ? "saved" : "from server"}</span>}</label>
-        <div className="row"><input type="password" value={key} onChange={(e) => setKey(e.target.value)} placeholder="sk-ant-…" /><button className="btn ghost" disabled={!key} onClick={() => save({ aiKey: key })}>Save key</button></div>
+        {a.engine !== "rules" && <><label>Anthropic API key {data.keySource && <span className="pill ok">{data.keySource === "workspace" ? "saved" : "from server"}</span>}</label>
+        <div className="row"><input type="password" value={key} onChange={(e) => setKey(e.target.value)} placeholder="sk-ant-…" /><button className="btn ghost" disabled={!key} onClick={() => save({ aiKey: key })}>Save key</button></div></>}
       </div>
-      <div className="card mb">
-        <h2>Personality &amp; instructions</h2>
+      <div className="card mb" style={{ display: a.engine === "rules" ? "none" : "block" }}>
+        <h2>AI personality &amp; instructions</h2>
         <div className="row"><div className="grow"><label>Name</label><input value={a.name} onChange={(e) => set({ name: e.target.value })} /></div>
           <div className="grow"><label>Mode</label><select value={a.mode} onChange={(e) => set({ mode: e.target.value })}><option value="support">Support — help and resolve</option><option value="sales">Sales — guide guests toward booking</option><option value="qa">Q&amp;A — answer questions only</option></select></div></div>
         <label>Instructions (tone, what to emphasise, what to avoid)</label>
@@ -49,8 +54,8 @@ function Behaviour() {
           <div style={{ width: 200 }}><label>Max replies per month</label><input type="number" min={1} value={a.monthly_credit_limit ?? ""} onChange={(e) => set({ monthly_credit_limit: e.target.value })} placeholder="no limit" /></div></div>
         <p className="muted small">{data.repliesThisMonth} replies this month · last 30 days: {data.usage30d.replies} replies, {data.usage30d.escalated} handed to your team.</p>
       </div>
-      <div className="card mb">
-        <h2>What it may do</h2>
+      <div className="card mb" style={{ display: a.engine === "rules" ? "none" : "block" }}>
+        <h2>What the AI may do</h2>
         <div className="grid" style={{ gridTemplateColumns: "1fr 1fr" }}>{data.allActions.map((x: string) => <label key={x} className="row small" style={{ margin: 0 }}><input type="checkbox" checked={a.actions.includes(x)} onChange={() => set({ actions: toggle(a.actions, x) })} /> {ACTION_LABEL[x]}</label>)}</div>
         <h2 style={{ marginTop: 16 }}>Approve automatically</h2>
         <p className="muted small">Bookings, cancellations and changes always wait for you. These smaller requests can be approved without asking:</p>
@@ -111,10 +116,10 @@ function Library() {
 }
 
 function Playground() {
-  const [log, setLog] = useState<{ role: "user" | "assistant"; text: string; steps?: any[] }[]>([]); const [text, setText] = useState(""); const [busy, setBusy] = useState(false); const [err, setErr] = useState("");
+  const [log, setLog] = useState<{ role: "user" | "assistant"; text: string; steps?: any[] }[]>([]); const [state, setState] = useState<any>(undefined); const [text, setText] = useState(""); const [busy, setBusy] = useState(false); const [err, setErr] = useState("");
   async function send() {
     const next = [...log, { role: "user" as const, text }]; setLog(next); setText(""); setBusy(true); setErr("");
-    try { const r = await api("/api/ai/playground", "POST", { transcript: next.map(({ role, text }) => ({ role, text })) }); setLog([...next, { role: "assistant", text: r.reply ?? "(no reply)", steps: r.steps }]); } catch (e: any) { setErr(e.message); }
+    try { const r = await api("/api/ai/playground", "POST", { transcript: next.map(({ role, text }) => ({ role, text })), state }); setState(r.state); setLog([...next, ...(r.replies?.length ? r.replies.map((t: string, i: number) => ({ role: "assistant" as const, text: t, steps: i === r.replies.length - 1 ? r.steps : undefined })) : [{ role: "assistant" as const, text: r.reply ?? "(no reply)", steps: r.steps }])]); } catch (e: any) { setErr(e.message); }
     setBusy(false);
   }
   return (
@@ -127,7 +132,36 @@ function Playground() {
         {busy && <div className="muted small">Thinking…</div>}
       </div>
       {err && <p style={{ color: "var(--danger)" }}>{err}</p>}
-      <div className="row mt"><input placeholder="Type as a guest, e.g. Do you have rooms for 3 people next weekend?" value={text} onChange={(e) => setText(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && text.trim() && !busy) send(); }} /><button className="btn" disabled={busy || !text.trim()} onClick={send}>Send</button><button className="btn ghost" onClick={() => setLog([])}>Clear</button></div>
+      <div className="row mt"><input placeholder="Type as a guest, e.g. Do you have rooms for 3 people next weekend?" value={text} onChange={(e) => setText(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && text.trim() && !busy) send(); }} /><button className="btn" disabled={busy || !text.trim()} onClick={send}>Send</button><button className="btn ghost" onClick={() => { setLog([]); setState(undefined); }}>Clear</button></div>
+    </div>
+  );
+}
+
+function HotelBot() {
+  const replies = useApi<any>("/api/bot/replies"); const faqs = useApi<any[]>("/api/bot/faqs"); const lib = useApi<any[]>("/api/assets");
+  const [edit, setEdit] = useState<Record<string, string>>({}); const [msg, setMsg] = useState(""); const [q, setQ] = useState({ keywords: "", answer: "", asset_label: "" });
+  if (!replies.data) return null;
+  const NICE: Record<string, string> = { greeting: "Greeting", menu_body: "Menu intro", rooms_header: "Rooms: intro", rooms_footer: "Rooms: closing line", rooms_none: "Rooms: when none listed", ask_dates: "Ask for dates", ask_nights: "Ask for nights", ask_guests: "Ask for guests", ask_room: "Ask which room", past_date: "Date already passed", long_stay: "Stay over 30 nights", confirm_booking: "Confirm booking details", booking_sent: "Booking sent to team", booking_restart: "Start booking again", cancel_confirm: "Confirm cancellation", cancel_pick: "Which booking to cancel", cancel_sent: "Cancellation sent", cancel_none: "No booking found", cancel_kept: "Cancellation dropped", status_none: "No bookings yet", status_list: "Booking status", checkin_times: "Check-in / check-out times", location_text: "Location", location_none: "No location set", photos_sent: "After photos", photos_none: "No photos set", service_ack: "Service request noted", callback_ack: "Callback noted", human: "Handing to a person", complaint: "Complaint", thanks: "Thanks", bye: "Goodbye", unknown: "Didn't understand", unknown_handoff: "Didn't understand twice", yes_no_prompt: "Asking yes/no", info_prefix: "Before knowledge answers" };
+  const keys = Object.keys(replies.data.defaults).filter((k) => NICE[k]);
+  const val = (k: string) => edit[k] ?? replies.data.current[k];
+  return (
+    <div style={{ maxWidth: 820 }}>
+      <div className="card mb">
+        <h2>Teach it your own questions</h2>
+        <p className="muted small">When a guest&apos;s message contains any of the words or phrases, the bot sends your answer (and, optionally, a file from your Library). These come before everything else, so use them for what guests ask most.</p>
+        <div className="row wrap"><div className="grow"><label>Words or phrases (comma-separated)</label><input value={q.keywords} onChange={(e) => setQ({ ...q, keywords: e.target.value })} placeholder="wifi, internet, wi-fi" /></div>
+          <div style={{ width: 220 }}><label>Also send file (optional)</label><select value={q.asset_label} onChange={(e) => setQ({ ...q, asset_label: e.target.value })}><option value="">None</option>{lib.data?.map((a) => <option key={a.id}>{a.label}</option>)}</select></div></div>
+        <label>Answer</label><textarea rows={3} value={q.answer} onChange={(e) => setQ({ ...q, answer: e.target.value })} placeholder="Free fast Wi-Fi in every room." />
+        <button className="btn mt" disabled={!q.keywords.trim() || !q.answer.trim()} onClick={async () => { try { await api("/api/bot/faqs", "POST", q); setQ({ keywords: "", answer: "", asset_label: "" }); setMsg(""); faqs.reload(); } catch (e: any) { setMsg(e.message); } }}>Add</button> <span className="muted small">{msg}</span>
+        {faqs.data?.map((f) => (<div key={f.id} className="check" style={{ alignItems: "center", opacity: f.enabled ? 1 : 0.5 }}><div className="grow"><div className="small muted">{f.keywords}{f.asset_label ? ` · sends “${f.asset_label}”` : ""} · used {f.hits}×</div><div className="small">{f.answer}</div></div>
+          <label className="row small" style={{ margin: 0 }}><input type="checkbox" checked={!!f.enabled} onChange={async (e) => { await api(`/api/bot/faqs/${f.id}`, "PATCH", { enabled: e.target.checked, asset_label: f.asset_label }); faqs.reload(); }} /> on</label>
+          <a className="small muted" style={{ cursor: "pointer" }} onClick={async () => { await api(`/api/bot/faqs/${f.id}`, "DELETE"); faqs.reload(); }}>delete</a></div>))}
+      </div>
+      <div className="card">
+        <div className="row between"><h2>What the bot says</h2><button className="btn" onClick={async () => { await api("/api/bot/replies", "PUT", { replies: { ...replies.data.current, ...edit } }); setEdit({}); setMsg("Saved"); replies.reload(); }}>Save wording</button></div>
+        <p className="muted small">Change any reply. Placeholders in curly braces are filled in automatically (for example {"{name}"}, {"{resort}"}, {"{check_in}"}). Clear a box to go back to the original.</p>
+        {keys.map((k) => (<div key={k}><label>{NICE[k]} {replies.data.help[k] && <span className="muted">· {replies.data.help[k]}</span>}</label><textarea rows={val(k).length > 90 ? 3 : 2} value={val(k)} onChange={(e) => setEdit({ ...edit, [k]: e.target.value || replies.data.defaults[k] })} /></div>))}
+      </div>
     </div>
   );
 }
