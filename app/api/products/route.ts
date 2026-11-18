@@ -12,7 +12,8 @@ export const POST = handle(async (req: Request) => {
   const b = await req.json();
   if (!String(b.name ?? "").trim()) return json({ error: "Name is required" }, 400);
   const pid = id("p_");
-  run("INSERT INTO products (id, workspace_id, name, description, price, currency, image_url, sku, active, created_at) VALUES (?,?,?,?,?,?,?,?,?,?)",
-    pid, s.workspaceId, b.name.trim(), b.description ?? "", Math.max(0, Number(b.price) || 0), "INR", b.image_url ?? "", b.sku ?? "", 1, now());
+  run("INSERT INTO products (id, workspace_id, name, description, price, currency, image_url, sku, active, capacity, units, weekend_price, meal_plan, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+    pid, s.workspaceId, b.name.trim(), b.description ?? "", Math.max(0, Number(b.price) || 0), "INR", b.image_url ?? "", b.sku ?? "", 1,
+    Math.max(1, Math.floor(Number(b.capacity) || 2)), Math.max(1, Math.floor(Number(b.units) || 1)), Number(b.weekend_price) > 0 ? Number(b.weekend_price) : null, String(b.meal_plan ?? "").slice(0, 120), now());
   return json({ id: pid });
 });

@@ -1,6 +1,7 @@
 import { all, id, now, run } from "@/lib/db";
 import { requireSession, HttpError } from "@/lib/auth";
 import { handle, json } from "@/lib/http";
+import { resolveCovered, resolveMiss } from "@/lib/learning";
 
 export const GET = handle(async () => {
   const s = await requireSession();
@@ -15,5 +16,7 @@ export const POST = handle(async (req: Request) => {
   if (!keywords || !String(b.answer ?? "").trim()) throw new HttpError(400, "Add at least one keyword and an answer");
   const fid = id("faq_");
   run("INSERT INTO bot_faqs (id, workspace_id, keywords, answer, asset_label, created_at) VALUES (?,?,?,?,?,?)", fid, s.workspaceId, keywords.slice(0, 500), String(b.answer).slice(0, 1500), b.asset_label ? String(b.asset_label).slice(0, 80) : null, now());
+  if (b.miss_id) resolveMiss(s.workspaceId, String(b.miss_id));
+  resolveCovered(s.workspaceId, keywords);
   return json({ id: fid });
 });

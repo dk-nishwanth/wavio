@@ -143,6 +143,17 @@ CREATE TABLE IF NOT EXISTS bot_faqs (
 CREATE TABLE IF NOT EXISTS assets (
   id TEXT PRIMARY KEY, workspace_id TEXT NOT NULL, path TEXT NOT NULL, mime TEXT NOT NULL, name TEXT NOT NULL, kind TEXT NOT NULL, label TEXT NOT NULL DEFAULT '', description TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL
 );
+CREATE TABLE IF NOT EXISTS bot_misses (
+  id TEXT PRIMARY KEY, workspace_id TEXT NOT NULL, text TEXT NOT NULL, norm TEXT NOT NULL, count INTEGER NOT NULL DEFAULT 1,
+  status TEXT NOT NULL DEFAULT 'open', last_at INTEGER NOT NULL, UNIQUE(workspace_id, norm)
+);
+CREATE TABLE IF NOT EXISTS saved_replies (
+  id TEXT PRIMARY KEY, workspace_id TEXT NOT NULL, title TEXT NOT NULL, text TEXT NOT NULL, created_at INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS audit_log (
+  id TEXT PRIMARY KEY, workspace_id TEXT NOT NULL, user_id TEXT, user_name TEXT, action TEXT NOT NULL, detail TEXT, created_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_audit_ws ON audit_log(workspace_id, created_at);
 CREATE TABLE IF NOT EXISTS rate_limits (key TEXT PRIMARY KEY, count INTEGER NOT NULL, reset_at INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS invoices (
   id TEXT PRIMARY KEY, workspace_id TEXT NOT NULL, number TEXT NOT NULL, plan TEXT NOT NULL, period TEXT NOT NULL,
@@ -203,6 +214,10 @@ export function db(): DatabaseSync {
     try { d.exec("ALTER TABLE campaigns ADD COLUMN var_map TEXT"); } catch { /* exists */ }
     try { d.exec("ALTER TABLE orders ADD COLUMN request_id TEXT"); } catch { /* exists */ }
     try { d.exec("ALTER TABLE ai_agents ADD COLUMN engine TEXT NOT NULL DEFAULT 'rules'"); } catch { /* exists */ }
+    try { d.exec("ALTER TABLE products ADD COLUMN capacity INTEGER NOT NULL DEFAULT 2"); } catch { /* exists */ }
+    try { d.exec("ALTER TABLE products ADD COLUMN units INTEGER NOT NULL DEFAULT 1"); } catch { /* exists */ }
+    try { d.exec("ALTER TABLE products ADD COLUMN weekend_price REAL"); } catch { /* exists */ }
+    try { d.exec("ALTER TABLE products ADD COLUMN meal_plan TEXT"); } catch { /* exists */ }
     g.__db = d;
     encryptLegacySecrets(d);
   }

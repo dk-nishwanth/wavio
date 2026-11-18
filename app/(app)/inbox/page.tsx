@@ -12,6 +12,7 @@ export default function Inbox() {
   const chat = useApi<any>(sel ? `/api/conversations/${sel}` : null, 2500);
   const tpls = useApi<any[]>("/api/templates");
   const settings = useApi<any>("/api/settings");
+  const saved = useApi<any[]>("/api/saved-replies");
   const [file, setFile] = useState<File | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   const [text, setText] = useState(""); const [note, setNote] = useState(false); const [err, setErr] = useState("");
@@ -108,6 +109,9 @@ export default function Inbox() {
               {tpl && <input style={{ flex: 1 }} placeholder="Variables separated by |  e.g. Asha | #1042" value={tplParams} onChange={(e) => setTplParams(e.target.value)} />}
             </div>
             {file && <div className="row small mt"><span className="pill">📎 {file.name}</span><a className="muted" style={{ cursor: "pointer" }} onClick={() => setFile(null)}>remove</a></div>}
+            {!tpl && !note && (saved.data?.length ?? 0) + 1 > 0 && <div className="row small mt"><select style={{ width: 220 }} value="" onChange={(e) => { const r = saved.data?.find((x) => x.id === e.target.value); if (r) setText((text ? text + "\n" : "") + r.text); }}><option value="">Saved replies…</option>{saved.data?.map((r) => <option key={r.id} value={r.id}>{r.title}</option>)}</select>
+              {text.trim() && <a className="muted" style={{ cursor: "pointer" }} onClick={async () => { const title = prompt("Name this saved reply"); if (title) { await api("/api/saved-replies", "POST", { title, text }); saved.reload(); } }}>＋ save this text</a>}
+              {saved.data?.length ? <a className="muted" style={{ cursor: "pointer" }} onClick={async () => { const t = prompt("Delete which? Type its exact name:\n" + saved.data!.map((r) => r.title).join(", ")); const r = saved.data!.find((x) => x.title === t); if (r) { await api(`/api/saved-replies/${r.id}`, "DELETE"); saved.reload(); } }}>manage</a> : null}</div>}
             {!tpl && <div className="row mt"><textarea rows={2} value={text} onChange={(e) => setText(e.target.value)} placeholder={note ? "Internal note (not sent)" : "Type a message"} onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }} /></div>}
             <div className="row between mt">
               <div className="row"><input ref={fileInput} type="file" hidden accept="image/jpeg,image/png,image/webp,video/mp4,audio/mpeg,audio/ogg,audio/aac,audio/mp4,application/pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt" onChange={(e) => { setFile(e.target.files?.[0] ?? null); e.target.value = ""; }} /><button className="btn ghost" type="button" onClick={() => fileInput.current?.click()} disabled={!!tpl || note}>📎 Attach</button>

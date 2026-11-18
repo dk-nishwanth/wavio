@@ -138,21 +138,34 @@ function Playground() {
 }
 
 function HotelBot() {
+  const misses = useApi<any[]>("/api/bot/misses", 15000);
   const replies = useApi<any>("/api/bot/replies"); const faqs = useApi<any[]>("/api/bot/faqs"); const lib = useApi<any[]>("/api/assets");
-  const [edit, setEdit] = useState<Record<string, string>>({}); const [msg, setMsg] = useState(""); const [q, setQ] = useState({ keywords: "", answer: "", asset_label: "" });
+  const [edit, setEdit] = useState<Record<string, string>>({}); const [msg, setMsg] = useState(""); const [q, setQ] = useState<any>({ keywords: "", answer: "", asset_label: "" });
   if (!replies.data) return null;
-  const NICE: Record<string, string> = { greeting: "Greeting", menu_body: "Menu intro", rooms_header: "Rooms: intro", rooms_footer: "Rooms: closing line", rooms_none: "Rooms: when none listed", ask_dates: "Ask for dates", ask_nights: "Ask for nights", ask_guests: "Ask for guests", ask_room: "Ask which room", past_date: "Date already passed", long_stay: "Stay over 30 nights", confirm_booking: "Confirm booking details", booking_sent: "Booking sent to team", booking_restart: "Start booking again", cancel_confirm: "Confirm cancellation", cancel_pick: "Which booking to cancel", cancel_sent: "Cancellation sent", cancel_none: "No booking found", cancel_kept: "Cancellation dropped", status_none: "No bookings yet", status_list: "Booking status", checkin_times: "Check-in / check-out times", location_text: "Location", location_none: "No location set", photos_sent: "After photos", photos_none: "No photos set", service_ack: "Service request noted", callback_ack: "Callback noted", human: "Handing to a person", complaint: "Complaint", thanks: "Thanks", bye: "Goodbye", unknown: "Didn't understand", unknown_handoff: "Didn't understand twice", yes_no_prompt: "Asking yes/no", info_prefix: "Before knowledge answers" };
+  const NICE: Record<string, string> = { greeting: "Greeting", menu_body: "Menu intro", rooms_header: "Rooms: intro", rooms_footer: "Rooms: closing line", rooms_none: "Rooms: when none listed", ask_dates: "Ask for dates", ask_nights: "Ask for nights", ask_guests: "Ask for guests", ask_room: "Ask which room", past_date: "Date already passed", long_stay: "Stay over 30 nights", confirm_booking: "Confirm booking details", booking_sent: "Booking sent to team", booking_restart: "Start booking again", cancel_confirm: "Confirm cancellation", cancel_pick: "Which booking to cancel", cancel_sent: "Cancellation sent", cancel_none: "No booking found", cancel_kept: "Cancellation dropped", status_none: "No bookings yet", status_list: "Booking status", checkin_times: "Check-in / check-out times", location_text: "Location", location_none: "No location set", photos_sent: "After photos", photos_none: "No photos set", service_ack: "Service request noted", callback_ack: "Callback noted", human: "Handing to a person", complaint: "Complaint", thanks: "Thanks", bye: "Goodbye", unknown: "Didn't understand", unknown_handoff: "Didn't understand twice", rating_high: "Rating 4–5", rating_review_cta: "Ask for a Google review", rating_low: "Rating 1–3", yes_no_prompt: "Asking yes/no", info_prefix: "Before knowledge answers" };
   const keys = Object.keys(replies.data.defaults).filter((k) => NICE[k]);
   const val = (k: string) => edit[k] ?? replies.data.current[k];
   return (
     <div style={{ maxWidth: 820 }}>
+      {(misses.data?.length ?? 0) > 0 && (
+        <div className="card mb">
+          <h2>Questions I couldn&apos;t answer ({misses.data!.length})</h2>
+          <p className="muted small">Guests asked these and the bot had no answer. Teach it once and it will answer next time.</p>
+          {misses.data!.slice(0, 8).map((m) => (
+            <div key={m.id} className="check" style={{ alignItems: "center" }}>
+              <div className="grow"><div>{m.text}</div><div className="small muted">asked {m.count}×</div></div>
+              <button className="btn ghost" onClick={() => { setQ({ keywords: m.suggested, answer: "", asset_label: "", miss_id: m.id }); window.scrollTo({ top: document.body.scrollHeight * 0.3, behavior: "smooth" }); }}>Teach</button>
+              <a className="small muted" style={{ cursor: "pointer" }} onClick={async () => { await api(`/api/bot/misses/${m.id}`, "POST"); misses.reload(); }}>ignore</a>
+            </div>))}
+        </div>
+      )}
       <div className="card mb">
         <h2>Teach it your own questions</h2>
         <p className="muted small">When a guest&apos;s message contains any of the words or phrases, the bot sends your answer (and, optionally, a file from your Library). These come before everything else, so use them for what guests ask most.</p>
         <div className="row wrap"><div className="grow"><label>Words or phrases (comma-separated)</label><input value={q.keywords} onChange={(e) => setQ({ ...q, keywords: e.target.value })} placeholder="wifi, internet, wi-fi" /></div>
           <div style={{ width: 220 }}><label>Also send file (optional)</label><select value={q.asset_label} onChange={(e) => setQ({ ...q, asset_label: e.target.value })}><option value="">None</option>{lib.data?.map((a) => <option key={a.id}>{a.label}</option>)}</select></div></div>
         <label>Answer</label><textarea rows={3} value={q.answer} onChange={(e) => setQ({ ...q, answer: e.target.value })} placeholder="Free fast Wi-Fi in every room." />
-        <button className="btn mt" disabled={!q.keywords.trim() || !q.answer.trim()} onClick={async () => { try { await api("/api/bot/faqs", "POST", q); setQ({ keywords: "", answer: "", asset_label: "" }); setMsg(""); faqs.reload(); } catch (e: any) { setMsg(e.message); } }}>Add</button> <span className="muted small">{msg}</span>
+        <button className="btn mt" disabled={!q.keywords.trim() || !q.answer.trim()} onClick={async () => { try { await api("/api/bot/faqs", "POST", q); setQ({ keywords: "", answer: "", asset_label: "" }); setMsg(""); faqs.reload(); misses.reload(); } catch (e: any) { setMsg(e.message); } }}>Add</button> <span className="muted small">{msg}</span>
         {faqs.data?.map((f) => (<div key={f.id} className="check" style={{ alignItems: "center", opacity: f.enabled ? 1 : 0.5 }}><div className="grow"><div className="small muted">{f.keywords}{f.asset_label ? ` · sends “${f.asset_label}”` : ""} · used {f.hits}×</div><div className="small">{f.answer}</div></div>
           <label className="row small" style={{ margin: 0 }}><input type="checkbox" checked={!!f.enabled} onChange={async (e) => { await api(`/api/bot/faqs/${f.id}`, "PATCH", { enabled: e.target.checked, asset_label: f.asset_label }); faqs.reload(); }} /> on</label>
           <a className="small muted" style={{ cursor: "pointer" }} onClick={async () => { await api(`/api/bot/faqs/${f.id}`, "DELETE"); faqs.reload(); }}>delete</a></div>))}

@@ -26,11 +26,13 @@ export default function Requests() {
 function Card({ r, onDone }: { r: any; onDone: (m: string) => void }) {
   const [advance, setAdvance] = useState(""); const [message, setMessage] = useState(""); const [err, setErr] = useState("");
   const d = r.details ?? {};
-  const act = async (action: string) => { setErr(""); try { await api(`/api/requests/${r.id}`, "POST", { action, advance: advance || undefined, message: message || undefined }); onDone(`Request ${action === "approve" ? "approved" : action === "decline" ? "declined" : "closed"}`); } catch (e: any) { setErr(e.message); } };
+  const act = async (action: string, force = false) => { setErr(""); try { await api(`/api/requests/${r.id}`, "POST", { action, advance: advance || undefined, message: message || undefined, force }); onDone(`Request ${action === "approve" ? "approved" : action === "decline" ? "declined" : "closed"}`); } catch (e: any) { setErr(e.message); if (/fully booked/.test(e.message) && confirm(e.message)) act(action, true); } };
   return (
     <div className="card">
       <div className="row between"><div className="row"><span className="pill info" style={{ margin: 0 }}>{KIND[r.kind]}</span><b style={{ fontWeight: 600 }}>{r.name || "+" + r.phone}</b></div><span className={"pill " + TONE[r.status]} style={{ margin: 0 }}>{r.status === "approved" ? "awaiting advance" : r.status}</span></div>
       <p style={{ margin: "8px 0" }}>{r.summary}</p>
+      {r.conflict && <div className={"banner"} style={{ margin: "8px 0", background: r.conflict.full ? "var(--red)" : "var(--tint)", color: r.conflict.full ? "var(--red-text)" : "var(--tint-text)" }}>{r.details.room}: {r.conflict.taken} of {r.conflict.units} already booked for these dates{r.conflict.full ? " — approving would overbook." : "."}</div>}
+      {d.estimate_total && <div className="small" style={{ margin: "4px 0" }}>💰 Bot's estimate: ₹{Number(d.estimate_total).toLocaleString("en-IN")}{d.rooms_needed > 1 ? ` (${d.rooms_needed} rooms)` : ""} — set the advance below</div>}
       {Object.keys(d).length > 0 && <div className="small muted">{Object.entries(d).map(([k, v]) => `${k.replace(/_/g, " ")}: ${v}`).join(" · ")}</div>}
       <div className="small muted mt">{when(r.created_at)} · {r.created_by === "ai" ? "raised by the concierge" : "added by your team"} <Link href="/inbox" style={{ textDecoration: "underline", marginLeft: 8 }}>open chat</Link></div>
       {r.status === "open" && (<>

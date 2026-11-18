@@ -70,6 +70,12 @@ export async function runTool(ctx: Ctx, name: string, input: Record<string, any>
       if (live) queueAsset(ws, c!, a.id, clip(input.caption, 300), { ai: true });
       return `sent "${a.label}"`;
     }
+    case "send_link": {
+      const url = String(input.url ?? "");
+      if (!/^https?:\/\//.test(url)) return "error: link must start with http(s)://";
+      if (live) queueCtaUrl(ws, c!, { body: clip(input.body, 900) || "Here is the link", label: clip(input.label, 20) || "Open", url }, { ai: true });
+      return "link sent";
+    }
     case "send_location": {
       const b = getBusiness(ws);
       if (typeof b.latitude === "number" && typeof b.longitude === "number") { if (live) queueLocation(ws, c!, { latitude: b.latitude, longitude: b.longitude, name: b.name, address: b.address }, { ai: true }); return "location sent"; }

@@ -9,5 +9,5 @@ export const POST = handle(async (req: Request, { params }: Ctx) => {
   const s = await requireSession();
   const b = await req.json();
   if (!["approve", "decline", "done"].includes(b.action)) throw new HttpError(400, "Unknown action");
-  return json(await decideRequest(s.workspaceId, (await params).id, s.userId, { action: b.action, note: b.note, message: b.message, advance: b.advance }));
+  return json(await decideRequest(s.workspaceId, (await params).id, s.userId, { action: b.action, note: b.note, message: b.message, advance: b.advance, force: !!b.force }));
 });

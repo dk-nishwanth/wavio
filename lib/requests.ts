@@ -6,6 +6,7 @@ import { createPaymentLink } from "./payments";
 import { cancelStay, recordStay } from "./stays";
 import { emitWebhook, queueCtaUrl, queueText, windowOpen, ensureConversation } from "./core";
 import { metaCfg } from "./metaleads";
+import { roomLoad } from "./pricing";
 
 export const REQUEST_KINDS = ["booking", "cancellation", "change", "service", "callback", "complaint", "handoff", "other"] as const;
 export type RequestKind = (typeof REQUEST_KINDS)[number];
@@ -31,7 +32,11 @@ export function listRequests(ws: string, status?: string) {
   return all<any>(
     `SELECT r.*, c.name, c.phone FROM requests r JOIN contacts c ON c.id=r.contact_id WHERE r.workspace_id=? ${status ? "AND r.status=?" : ""} ORDER BY CASE r.status WHEN 'open' THEN 0 WHEN 'approved' THEN 1 ELSE 2 END, r.created_at DESC LIMIT 200`,
     ...(status ? [ws, status] : [ws]),
-  ).map((r) => ({ ...r, details: JSON.parse(r.details) }));
+  ).map((r) => {
+    const details = JSON.parse(r.details);
+    const conflict = r.kind === "booking" && ["open", "approved"].includes(r.status) && details.room && details.check_in_date && details.check_out_date ? roomLoad(ws, details.room, details.check_in_date, details.check_out_date) : null;
+    return { ...r, details, conflict };
+  });
 }
 
 /** Tell the guest something. Free text only works inside the 24-hour window; otherwise it's noted for the admin. */
@@ -43,7 +48,7 @@ function tellGuest(ws: string, contactId: string, text: string) {
   return true;
 }
 
-export type Decision = { action: "approve" | "decline" | "done"; note?: string; message?: string; advance?: number };
+export type Decision = { action: "approve" | "decline" | "done"; note?: string; message?: string; advance?: number; force?: boolean };
 
 export async function decideRequest(ws: string, requestId: string, userId: string, d: Decision) {
   const r = get<any>("SELECT * FROM requests WHERE id=? AND workspace_id=?", requestId, ws);
@@ -56,6 +61,8 @@ export async function decideRequest(ws: string, requestId: string, userId: strin
   if (d.action === "approve" && r.kind === "booking") {
     const { check_in_date, check_out_date } = details;
     if (!check_in_date || !check_out_date) throw new HttpError(400, "This booking request has no dates — edit the details or decline it");
+    const load = details.room ? roomLoad(ws, details.room, check_in_date, check_out_date) : null;
+    if (load?.full && !d.force) throw new HttpError(409, `${details.room} is already fully booked for these dates (${load.taken} of ${load.units}). Approve anyway to overbook.`);
     const advance = Math.max(0, Number(d.advance) || 0);
     if (advance > 0) {
       const o = createOrder(ws, r.contact_id, [{ name: `Advance — stay ${check_in_date} to ${check_out_date}`, price: advance, qty: 1 }]);
