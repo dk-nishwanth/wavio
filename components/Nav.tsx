@@ -25,19 +25,23 @@ const I = {
   cog: (<><circle cx="12" cy="12" r="3" /><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M19.1 4.9 17 7M7 17l-2.1 2.1" /></>),
 };
 
-const groups: { title: string; links: [string, string, keyof typeof I][] }[] = [
-  { title: "Engage", links: [["/home", "Home", "home"], ["/setup", "Setup", "cog"], ["/test", "Test the bot", "play"], ["/inbox", "Inbox", "inbox"], ["/requests", "Requests", "inbox2"], ["/stays", "Stays", "cal"], ["/contacts", "Contacts", "users"], ["/leads", "Leads", "target"], ["/reports", "Reports", "chart"]] },
-  { title: "Grow", links: [["/concierge", "Guest Bot", "bot"], ["/templates", "Templates", "file"], ["/catalog", "Catalog", "bag"], ["/orders", "Orders", "receipt"], ["/campaigns", "Broadcasts", "send"], ["/automations", "Automations", "zap"]] },
-  { title: "Build", links: [["/team", "Team", "users"], ["/billing", "Billing", "card"], ["/activity", "Activity log", "list"], ["/developers", "Developers", "code"], ["/settings", "Settings", "cog"]] },
-];
+type L = [string, string, keyof typeof I];
+/** The daily essentials stay in view; everything else lives under "More" so the menu fits a laptop screen. */
+const MAIN: L[] = [["/home", "Home", "home"], ["/setup", "Setup", "cog"], ["/test", "Test the bot", "play"], ["/inbox", "Inbox", "inbox"], ["/requests", "Requests", "inbox2"], ["/stays", "Stays", "cal"], ["/concierge", "Guest Bot", "bot"], ["/catalog", "Catalog", "bag"], ["/reports", "Reports", "chart"], ["/settings", "Settings", "cog"]];
+const MORE: L[] = [["/contacts", "Contacts", "users"], ["/leads", "Leads", "target"], ["/templates", "Templates", "file"], ["/orders", "Orders", "receipt"], ["/campaigns", "Broadcasts", "send"], ["/automations", "Automations", "zap"], ["/team", "Team", "users"], ["/billing", "Billing", "card"], ["/activity", "Activity log", "list"], ["/developers", "Developers", "code"]];
 
 export default function Nav({ name, terms, showBilling = false }: { name: string; terms: { catalog: string; orders: string }; showBilling?: boolean }) {
   const label = (l: string) => (l === "Catalog" ? terms.catalog : l === "Orders" ? terms.orders : l);
+  const more = MORE.filter(([href]) => showBilling || href !== "/billing");
   const path = usePathname();
+  const [open, setOpen] = useState(false);
+  const [showMore, setShowMore] = useState(false);
   const [unread, setUnread] = useState(0);
   const [reqs, setReqs] = useState(0);
   const [perm, setPerm] = useState<string>("default");
   const prev = useRef<number | null>(null);
+  useEffect(() => setOpen(false), [path]);
+  useEffect(() => { if (MORE.some(([h]) => path.startsWith(h))) setShowMore(true); }, [path]);
   useEffect(() => {
     setPerm(typeof Notification === "undefined" ? "unsupported" : Notification.permission);
     let stop = false;
@@ -59,20 +63,21 @@ export default function Nav({ name, terms, showBilling = false }: { name: string
     const t = setInterval(tick, 8000);
     return () => { stop = true; clearInterval(t); };
   }, []);
+  const item = (href: string, l: string, icon: keyof typeof I) => (
+    <Link key={href} href={href} className={"nav" + (path.startsWith(href) ? " on" : "")}>
+      <svg viewBox="0 0 24 24">{I[icon]}</svg>{label(l)}{href === "/inbox" && unread > 0 && <span className="dot" style={{ marginLeft: "auto" }}>{unread}</span>}{href === "/requests" && reqs > 0 && <span className="dot" style={{ marginLeft: "auto" }}>{reqs}</span>}
+    </Link>
+  );
   return (
-    <nav className="side">
+    <>
+    <div className="mobilebar"><div className="brand" style={{ padding: 0, fontSize: 18 }}><img src="/logo-mark.svg" alt="" style={{ width: 26, height: 26 }} />wavio</div><button aria-label="Menu" onClick={() => setOpen((o) => !o)}>{open ? "✕" : "☰"}{!open && unread + reqs > 0 && <span className="dot" style={{ marginLeft: 4, fontSize: 11 }}>{unread + reqs}</span>}</button></div>
+    <nav className={"side" + (open ? " open" : "")}>
       <div className="brand"><img src="/logo-mark.svg" alt="" />wavio</div>
-      {groups.map((g) => (
-        <div key={g.title}>
-          <div className="grp">{g.title}</div>
-          {g.links.filter(([href]) => showBilling || href !== "/billing").map(([href, l, icon]) => (
-            <Link key={href} href={href} className={"nav" + (path.startsWith(href) ? " on" : "")}>
-              <svg viewBox="0 0 24 24">{I[icon]}</svg>{label(l)}{href === "/inbox" && unread > 0 && <span className="dot" style={{ marginLeft: "auto" }}>{unread}</span>}{href === "/requests" && reqs > 0 && <span className="dot" style={{ marginLeft: "auto" }}>{reqs}</span>}
-            </Link>
-          ))}
-        </div>
-      ))}
-      <div style={{ flex: 1 }} />
+      <div className="navlist">
+        {MAIN.map(([href, l, icon]) => item(href, l, icon))}
+        <button className="nav morebtn" onClick={() => setShowMore((v) => !v)}><svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6" style={{ transform: showMore ? "rotate(180deg)" : "none", transformOrigin: "center" }} /></svg>{showMore ? "Less" : "More"}</button>
+        {showMore && more.map(([href, l, icon]) => item(href, l, icon))}
+      </div>
       {perm === "default" && <button className="btn ghost small" style={{ marginBottom: 8, justifyContent: "center" }} onClick={async () => setPerm(await Notification.requestPermission())}>Turn on desktop alerts</button>}
       <div className="me">
         <div className="avatar">{name.slice(0, 1).toUpperCase()}</div>
@@ -82,5 +87,6 @@ export default function Nav({ name, terms, showBilling = false }: { name: string
         </div>
       </div>
     </nav>
+    </>
   );
 }

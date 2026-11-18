@@ -412,7 +412,7 @@ export async function handleGuest(ws: string, contactId: string | null, text: st
     // an open question (dates, confirmation…) gets the next answer, unless the guest clearly wants something else
     const escape = top && ["human", "complaint", "menu"].includes(top.intent) || (top?.intent === "cancel" && !st.step.startsWith("cancel"));
     if (!escape) { await continueStep(); return finish(); }
-    st.step = undefined; st.slots = {};
+    st.step = undefined; st.slots = {}; out.debug.route = "";
   }
   await freshMessage();
   return finish();

@@ -35,6 +35,10 @@ describe("CSV exports", () => {
   it("neutralises spreadsheet formulas planted in a guest's name", () => {
     for (const evil of ["=HYPERLINK(\"http://x\")", "+1+1", "-2+3", "@SUM(A1)"]) expect(csvCell(evil).startsWith("'") || csvCell(evil).startsWith('"\'')).toBe(true);
   });
+  it("leaves real phone numbers alone", () => {
+    expect(csvCell("+919876543210")).toBe("+919876543210");
+    expect(csvCell("+1+1")).toBe("'+1+1");
+  });
   it("starts with a BOM so Excel reads Hindi names correctly", () => {
     const out = toCsv(["Name"], [["आशा"]]);
     expect(out.charCodeAt(0)).toBe(0xfeff);

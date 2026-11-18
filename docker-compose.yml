@@ -1,0 +1,29 @@
+# Production on one server: the app plus Caddy, which gets a free HTTPS certificate for your domain automatically.
+#   1. Copy .env.production.example to .env.production and fill it in
+#   2. Point your domain's DNS at this server
+#   3. docker compose up -d
+services:
+  app:
+    build: .
+    restart: unless-stopped
+    env_file: .env.production
+    volumes:
+      - wavio-data:/data          # database, backups and uploaded files live here — back this up
+    expose:
+      - "3000"
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN: ${DOMAIN:?set DOMAIN, e.g. bot.yourresort.com}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+    depends_on:
+      - app
+volumes:
+  wavio-data:
+  caddy-data:

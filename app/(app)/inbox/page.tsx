@@ -45,7 +45,7 @@ export default function Inbox() {
   const approved = (tpls.data ?? []).filter((t) => t.status === "APPROVED");
 
   return (
-    <div className="inbox">
+    <div className={"inbox" + (sel ? " sel" : "")}>
       <div className="list">
         <div style={{ padding: 10 }}>
           <input placeholder="Search name or phone" value={q} onChange={(e) => setQ(e.target.value)} />
@@ -73,7 +73,7 @@ export default function Inbox() {
       <div className="chat">
         {!c ? <p className="muted" style={{ padding: 20 }}>Select a conversation</p> : (<>
           <div className="row between" style={{ padding: "10px 14px", borderBottom: "1px solid var(--line)" }}>
-            <div><b>{c.name || "+" + c.phone}</b> <span className="muted small">+{c.phone}</span>
+            <div><button className="btn ghost back" style={{ marginRight: 8, padding: "4px 10px" }} onClick={() => setSel(null)}>←</button><b>{c.name || "+" + c.phone}</b> <span className="muted small">+{c.phone}</span>
               {!c.opted_in && <span className="pill bad">opted out</span>}</div>
             <div className="row">
               <select style={{ width: 150 }} value={c.assigned_to ?? ""} onChange={(e) => patch({ assigned_to: e.target.value })}>

@@ -52,5 +52,9 @@ A verified snapshot is written daily to `backups/` (last 14 kept) by the running
 ## Pilot deployment (single server)
 Run on one VM with a persistent disk: `npm run build && npm start`, behind HTTPS (Caddy/nginx/Cloudflare Tunnel), with the env vars above. The job loop runs inside the server. Not suitable for serverless hosts (Vercel) until the database moves to Postgres.
 
+## Guides
+- [Admin guide](docs/ADMIN_GUIDE.md) · [Go-live checklist](docs/GO_LIVE.md) · [Connecting WhatsApp](docs/WHATSAPP_SETUP.md)
+- `npm run doctor` checks the setup before launch · `docker compose up -d` runs it in production (see the checklist).
+
 ## Layout
 `lib/` core logic (messaging, flows, CRM, billing, payments) · `app/api/` REST API · `app/(app)/` dashboard · `sdk/` React SDK · `tests/` Vitest suites · `worker.ts` standalone job runner.
