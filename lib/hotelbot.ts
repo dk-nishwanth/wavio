@@ -89,7 +89,7 @@ const LEX: Record<Intent, [number, string[]][]> = {
   photos: [[4, ["photo", "photos", "picture", "pictures", "pics", "images", "gallery", "brochure", "pdf", "video", "tasveer", "फोटो", "तस्वीर"]]],
   location: [[4, ["location", "address", "directions", "map", "how to reach", "how do i reach", "where are you", "where is", "route", "kahan", "landmark", "google maps", "nearest airport", "nearest station", "kaha hai", "pata", "how far", "distance", "reach kaise", "kaise pahunche", "pin location", "send location", "locate", "लोकेशन", "पता", "कहाँ"]]],
   timings: [[4, ["late night arrival", "late arrival", "arrival time", "arriving late", "reach late", "check in time", "check out time", "checkin time", "checkout time", "check in timing", "check out timing", "check in", "check out", "checkin", "checkout", "चेक इन", "चेक आउट", "चेक-इन", "चेक-आउट"]]],
-  cancel: [[5, ["cancel", "cancellation", "cancel my booking", "cancel booking", "cancel karo", "refund", "money back", "paisa wapas", "कैंसिल", "रद्द"]]],
+  cancel: [[5, ["cancelled", "canceled", "cancel", "cancellation", "cancel my booking", "cancel booking", "cancel karo", "refund", "money back", "paisa wapas", "कैंसिल", "रद्द"]]],
   status: [[4, ["my booking", "booking status", "booking id", "my reservation", "is my booking confirmed", "confirmation", "booking details"]]],
   service: [[4, ["pickup", "pick up", "airport transfer", "transfer", "taxi", "cab", "extra bed", "baby cot", "cot", "late checkout", "late check out", "early check in", "early checkin", "decoration", "decorate", "cake", "surprise", "candle light dinner", "bonfire", "safari", "jeep", "spa", "massage", "laundry", "special request"]]],
   payment: [[4, ["payment link", "pay link", "payment", "paid", "receipt", "transaction", "screenshot", "payment done", "paid already", "advance", "upi", "pay now", "how to pay"]]],
@@ -117,7 +117,7 @@ const YES = ["yes", "y", "yep", "yeah", "ok", "okay", "sure", "confirm", "send",
 const NO = ["no", "n", "nope", "nahi", "nahin", "change", "edit", "wrong", "incorrect", "not right", "dont send", "start over", "back"];
 const yesNo = (text: string): "yes" | "no" | null => { const t = norm(text); if (NO.some((p) => has(t, p))) return "no"; if (YES.some((p) => has(t, p))) return "yes"; return null; };
 
-const STOPWORDS = new Set("free kitna door dur far distance long available avail hai hain kya ke ka ki ko se mein me hota hoti milega milegi provide provided aap kar karo ho hoga tha thi the a an the is are was were be to of and or in on at for with do does can i you we it this that what how when where which who please my your our me tell about there any have has get got want need would like".split(" "));
+const STOPWORDS = new Set("confirm confirmed mil jayega jaega milta milti sakte sakta sakti hota kab free kitna door dur far distance long available avail hai hain kya ke ka ki ko se mein me hota hoti milega milegi provide provided aap kar karo ho hoga tha thi the a an the is are was were be to of and or in on at for with do does can i you we it this that what how when where which who please my your our me tell about there any have has get got want need would like".split(" "));
 /** Very light stemming so "allowed"/"allow" and "pets"/"pet" count as the same word. */
 const stem = (w: string) => w.replace(/(ing|ed|es|s)$/, "").replace(/(.)\1$/, "$1");
 const termsOf = (t: string) => [...new Set(norm(t).split(" ").filter((w) => w.length > 2 && !STOPWORDS.has(w)).map(stem))].filter((w) => w.length > 1);
@@ -174,7 +174,7 @@ const botVocab = (ws: string) => cachedVocab(`bot:${ws}`, () => {
 });
 
 // ---------- the conversation ----------
-export type Memory = { menu?: boolean; room?: string; guests?: number; budget?: number; dates?: { in: string; out: string }; booked?: { in: string; out: string; guests?: number; room?: string; at: number; estimate?: number; rooms?: number } };
+export type Memory = { cheap?: boolean; menu?: boolean; room?: string; guests?: number; budget?: number; dates?: { in: string; out: string }; booked?: { in: string; out: string; guests?: number; room?: string; at: number; estimate?: number; rooms?: number } };
 type State = { step?: string; slots: Record<string, any>; misses: number; lang?: "hi"; ctx?: Memory };
 export type BotOutput = { type: "text"; text: string } | { type: "tool"; tool: string; input: any; ok: boolean; result: string };
 export type BotDebug = { clean: string; intents: { intent: string; score: number }[]; dates: any; guests: number | null; lang: string; step?: string; route: string };
@@ -223,7 +223,9 @@ export async function handleGuest(ws: string, contactId: string | null, text0: s
   const clean = normalizeMessage(text, vocab);
   const t = norm(clean);
   const intents = detectIntents(clean);
-  const top = intents[0];
+  // "available" alone isn't a booking: let a more specific intent (pickup, photos…) win
+  const softBooking = intents[0]?.intent === "booking" && intents.length > 1 && !/\b(book|booking|reserve|reservation|room|rooms|stay|vacancy|vacancies|trip|vacation|getaway|holiday|plan|planning|anniversary|looking)\b/.test(t);
+  const top = softBooking ? intents[1] : intents[0];
   const range = parseDateRange(clean);
   out.debug = { clean, intents: intents.slice(0, 4), dates: range, guests: parseGuests(clean), lang: st.lang ?? "en", step: st.step, route: st.step ? `continuing: ${st.step}` : "" };
 
@@ -327,11 +329,18 @@ export async function handleGuest(ws: string, contactId: string | null, text0: s
       parts.push(`For ${exNow.nights} night${exNow.nights === 1 ? "" : "s"} (weekday rates):\n` + rooms.map((r) => `• *${r.name}* — ${inr(r.price * exNow.nights!)}`).join("\n") + "\nTell me your dates and I'll check availability.");
       return { text: parts.join("\n\n"), kind: "price", asset };
     }
+    if (U.q.availability && exNow.check_in && rooms.length && (refRooms.length || U.rooms.length)) {
+      const d = { in: exNow.check_in, out: exNow.check_out ?? addDays(exNow.check_in, exNow.nights ?? 1) };
+      parts.push(availabilityAnswer(refRooms.length ? refRooms : U.rooms, d, guests, loadFor(d))); kind = "availability"; out.debug.route = "availability";
+      return { text: parts.join("\n\n"), kind, asset };
+    }
     const kbFirst = (generalRoomQ || U.q.distance) && !U.rooms.length ? answerFromKnowledge(ws, clean) : null;
     if (kbFirst) { parts.push(kbFirst); kind = "kb"; out.debug.route = "answer found in your knowledge"; }
     else if ((refRooms.length || generalRoomQ) && roomQ && !U.q.suggest && top?.intent !== "photos") {
       parts.push(roomAnswer(refRooms.length ? refRooms : rooms, U, { dates, guests, load: loadFor(dates) })); kind = "room"; out.debug.route = `about: ${refRooms.map((r) => r.name).join(", ")}`;
       if (refRooms.length === 1) mem.room = refRooms[0].name;
+    } else if (!U.q.suggest && !U.budget && !U.rooms.length && U.occasion && (U.qword || U.question) && answerFromKnowledge(ws, clean)) {
+      parts.push(answerFromKnowledge(ws, clean)!); kind = "kb"; out.debug.route = "answer found in your knowledge";
     } else if (rooms.length && (U.q.suggest || (U.occasion && (U.qword || U.q.suggest)) || (U.budget && !refRooms.length) || (U.q.capacity && U.guests && !refRooms.length))) {
       const rec = recommend(rooms, U, guests);
       if (rec) { parts.push(rec.text); kind = rec.needMore ? "ask" : "recommend"; out.debug.route = "recommendation"; if (rec.picks[0]) mem.room = rec.picks[0].name; }
@@ -356,21 +365,21 @@ export async function handleGuest(ws: string, contactId: string | null, text0: s
       out.debug.route = "reminding what they said";
       return bookStep(`You're right, sorry! I have ${dateSummary({ in: s.check_in, out: s.check_out ?? s.check_in, guests: s.guests, room: s.room })}.`);
     }
-    if (st.step && st.step.startsWith("book") && top?.intent === "rooms" && !U.rooms.length && !(exNow.check_in || exNow.check_out || exNow.nights || exNow.guests || exNow.rooms) && !U.q.suggest && !/\b(any|no preference|anything|koi bhi|cheapest|whichever|same)\b/.test(t)) {
+    if (st.step && st.step.startsWith("book") && top?.intent === "rooms" && !U.rooms.length && !(exNow.check_in || exNow.check_out || exNow.nights || exNow.guests || exNow.rooms) && !U.q.suggest && !U.budget && !U.q.discount && !/\b(any|no preference|anything|koi bhi|cheapest|whichever|same)\b/.test(t)) {
       out.debug.route = "intent: rooms"; await roomsList(); return bookStep();
     }
     switch (st.step) {
       case "book": case "book_room": {
-        const nod = /^(yes|yeah|ok|okay|haan|ha|ya|hmm|hm|sure|done|fine|book it|go ahead)( please| pls| plz)?$/.test(t);
-        if (nod && st.step === "book_room" && !s.room) { s.room = mem.room ?? "No preference"; return bookStep(); }
+        const nod = /^(yes|yeah|ok|okay|haan|ha|ya|hmm|hm|sure|done|fine|book|book it|confirm|go ahead|kar do|book kar do)( please| pls| plz)?$/.test(t);
+        if (nod && st.step === "book_room" && !s.room) { s.room = s.pref === "cheapest" ? [...rooms].sort((a, b) => a.price - b.price)[0]?.name : (mem.room ?? "No preference"); delete s.pref; return bookStep(); }
         if (nod) return bookStep();
         if (st.step === "book_room" && !s.room && /\b(cheapest|cheap|lowest|sasta|sabse sasta)\b/.test(t)) { const c = [...rooms].sort((a, b) => a.price - b.price).find((r) => true); if (c) { s.room = c.name; return bookStep(`Noted — ${c.name}, our most affordable.`); } }
         const askingAboutRoom = U.rooms.length > 0 && (U.q.price || U.q.inclusions || U.q.capacity || U.q.details || U.question) && !U.wantsBook;
         const qWithInfo = ((U.qword || U.question) && ["timings", "location", "photos", "service"].includes(top?.intent ?? "")) || (U.q.price && !!exNow.nights && !exNow.check_in && !s.check_in);
-        const pushback = qWithInfo || /\b(too )?(costly|expensive|mehnga|mahenga|pricey|too much|cheaper|sasta|sasti|discount)\b/.test(t);
-        const info = !pushback && !askingAboutRoom && !!(exNow.check_in || exNow.check_out || exNow.nights || exNow.guests || exNow.rooms || U.rooms.length || /(any|no preference|anything|koi bhi|cheapest|whichever|same)/.test(t));
+        const pushback = qWithInfo || (/\b(too )?(costly|expensive|mehnga|mahenga|pricey|too much|cheaper|sasta|sasti)\b/.test(t)) || U.q.discount;
+        const info = !pushback && !askingAboutRoom && !!(exNow.check_in || exNow.check_out || exNow.nights || exNow.guests || exNow.rooms || U.rooms.length || /\b(any|no preference|anything|koi bhi|cheapest|whichever|same)\b/.test(t));
         if (!info && await sideTurn()) return bookStep();
-        const pushback0 = /\b(cheaper|costly|expensive|mehnga|sasta|discount)\b/.test(t);
+        const pushback0 = /\b(cheaper|costly|expensive|mehnga|sasta)\b/.test(t);
         const side = false;
         const ack = absorb();
         if (st.step === "book_room" && !s.room && /\b(any|no preference|anything|koi bhi|whichever)\b/.test(t) && !pushback0) s.room = "No preference";
@@ -456,7 +465,8 @@ export async function handleGuest(ws: string, contactId: string | null, text0: s
   async function freshMessage() {
     if (await ratingReply()) return;
     // price pushback: show the cheapest and offer a conversation about rates
-    if (/\b(too )?(costly|expensive|mehnga|mahenga|pricey|too much|cheaper|sasta|sasti|lower|reduce|kam karo|discount)\b/.test(t) && rooms.length) {
+    if (/\b(too )?(costly|expensive|mehnga|mahenga|pricey|too much|cheaper|sasta|sasti|sabse sasta|lower|reduce|kam karo)\b/.test(t) && rooms.length && !U.q.discount) {
+      mem.cheap = true;
       out.debug.route = "price pushback";
       const cheapest = [...rooms].sort((a, b) => a.price - b.price)[0];
       emit(`I understand! Our most affordable stay is the *${cheapest.name}* at ${inr(cheapest.price)}/night. Our rates also change with the season and the length of stay — tell me your dates and number of guests and I'll ask our team for the best rate we can offer.`);
@@ -477,7 +487,7 @@ export async function handleGuest(ws: string, contactId: string | null, text0: s
     // "what is the total?" after the request went out
     if (mem.booked?.estimate && now() - mem.booked.at < 864e5 && /\b(total|amount|how much|kitna|cost|price|estimate)\b/.test(t) && !U.rooms.length && !exNow.check_in) { out.debug.route = "total of the request"; emit(`For ${dateSummary(mem.booked as any)}, the estimate is ${inr(mem.booked.estimate)}${mem.booked.rooms && mem.booked.rooms > 1 ? ` (${mem.booked.rooms} rooms)` : ""}. Our team will confirm the final price.`); return; }
     // a "yes"/thanks right after the request was sent
-    if (mem.booked && now() - mem.booked.at < 36e5 && yesNo(clean) === "yes" && !(exNow.check_in || exNow.guests)) { emit("Your request is with our team — they'll confirm availability and next steps right here shortly."); return; }
+    if (mem.booked && now() - mem.booked.at < 36e5 && /^(yes|ok|okay|haan|ha|ya|sure|done|fine)( please| pls| plz)?$/.test(t)) { emit("Your request is with our team — they'll confirm availability and next steps right here shortly."); return; }
     // people and complaints come first
     if (/\b(refund|money back|paisa wapas|paise wapas)\b/.test(t)) { out.debug.route = "intent: refund"; await tool("create_request", { kind: "complaint", summary: `Refund question: ${text.slice(0, 160)}` }); await handoff("Guest asked about a refund"); emit("I've passed your refund question to our team — they'll reply here shortly."); return; }
     if (top?.intent === "complaint") { out.debug.route = "intent: complaint"; await tool("create_request", { kind: "complaint", summary: text.slice(0, 200) }); await handoff("Guest is unhappy: " + text.slice(0, 120)); say("complaint"); return; }
@@ -509,7 +519,8 @@ export async function handleGuest(ws: string, contactId: string | null, text0: s
     if (U.budget) mem.budget = U.budget;
     if (/\b(status|confirmed|confirmation|booking id|my booking|booking details|my reservation)\b/.test(t) && !/\bcancel/.test(t)) { out.debug.route = "intent: status"; const r = await tool("my_bookings", {}); if (/Stays: none/.test(r) && /Requests: none/.test(r)) say("status_none"); else say("status_list", { list: r }); return; }
     if (/\b(payment|pay link|payment link|advance|upi|pay now|how to pay)\b/.test(t) && top?.intent === "payment") { out.debug.route = "intent: payment"; const r = await tool("my_bookings", {}); const rid = r.match(/rq_[\w-]+/)?.[0]; if (rid) { const pp = await tool("send_payment_link", { request_id: rid }); if (!pp.startsWith("error")) return; } await handoff("Guest asked about payment"); say("human"); return; }
-    const wantsStay0 = U.wantsBook || top?.intent === "booking" || (top?.intent === "rooms" && !!(exNow.check_in || exNow.guests || exNow.nights || exNow.rooms)) || (!!exNow.check_in && !!(exNow.check_out || exNow.nights || exNow.guests));
+    const slotInfo0 = !!(exNow.check_in || exNow.guests || exNow.nights || exNow.rooms);
+    const wantsStay0 = U.wantsBook || (top?.intent === "booking" && (slotInfo0 || /\b(book|booking|reserve|reservation|room|rooms|stay|vacancy|vacancies|trip|vacation|getaway|holiday|plan|planning|anniversary|looking)\b/.test(t))) || (top?.intent === "rooms" && !!(exNow.check_in || exNow.guests || exNow.nights || exNow.rooms)) || (!!exNow.check_in && !!(exNow.check_out || exNow.nights || exNow.guests));
     const ans = await collectAnswers();
     const bareSlots = !ans.text && !top && !U.question && !U.qword && !!(exNow.guests || exNow.check_in || exNow.nights || exNow.rooms);
     const wantsStay = !inStep && ((wantsStay0 && !(ans.kind === "kb" && !U.wantsBook && !exNow.check_in && !exNow.guests)) || bareSlots);
@@ -521,6 +532,7 @@ export async function handleGuest(ws: string, contactId: string | null, text0: s
     if (wantsStay || (U.q.availability && exNow.check_in && rooms.length)) {
       if (!ans.text && top?.intent === "rooms") await roomsList();
       st.slots = { waiting: undefined };
+      if (mem.cheap) st.slots.pref = "cheapest";
       if (refRooms.length === 1 && (U.wantsBook || U.refersBack)) st.slots.room = refRooms[0].name;
       if (mem.guests && !exNow.guests) st.slots.guests = mem.guests;
       if (mem.dates && !exNow.check_in) { st.slots.check_in = mem.dates.in; st.slots.check_out = mem.dates.out; }
@@ -568,6 +580,7 @@ export async function handleGuest(ws: string, contactId: string | null, text0: s
     if ((top?.intent === "menu" && /^(main )?menu$|^options?$|^help$|^start( over)?$|^home$|what can you do/.test(t)) || top?.intent === "greeting") { await greetMenu(); return; }
 
     // nothing matched: offer the menu, then a person
+    if (!inStep && /^(hi|hii|hello|hey|hlo|namaste|namaskar|good (morning|afternoon|evening))\b/.test(t)) { out.debug.route = "greeting"; await greetMenu(); return; }
     if (inStep && (U.question || U.qword)) { if (!dry) recordMiss(ws, text); emit("I don't have that detail handy — I've noted it for our team. Meanwhile, let's finish your booking."); return; }
     if (inStep) { st.misses += 1; if (st.misses >= 2) { await handoff("The hotel bot couldn't understand the guest twice"); say("unknown_handoff"); } else emit("Sorry, I didn't catch that. " + (st.step === "book_confirm" ? "Shall I send your request to our team?" : "")); return; }
     st.misses += 1;

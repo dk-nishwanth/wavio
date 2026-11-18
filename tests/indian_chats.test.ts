@@ -73,4 +73,18 @@ describe("average Indian guest chats", () => {
     const l = await chat(["reach on friday leave sunday", "3 people", "tent", "what time can we check in friday"]);
     expect(l.replies[3]).toMatch(/Check-in is from 12:00 PM/);
   });
+  it("copes with greetings plus chatter, ranges, pickup, capacity and facility questions", async () => {
+    expect((await chat(["Hi, I saw your resort on instagram"])).replies[0]).toMatch(/Welcome to Jawai Retreat/);
+    const a = await chat(["need group booking", "20 members", "10 rooms", "dec 5-7"]);
+    expect(a.replies[3]).toMatch(/5 Dec 2026, check-out 7 Dec 2026/);
+    expect((await chat(["pickup available?"])).replies[0]).toMatch(/airport pickup/);
+    expect((await chat(["any parking for kids"])).replies[0]).toMatch(/Free parking/);
+    const b = await chat(["25 dec", "how many people can stay"]);
+    expect(b.replies[1]).toMatch(/Sleeps 6/);
+    const c = await chat(["Hi do you have pool villa available on 25 dec"]);
+    expect(c.replies[0]).toMatch(/Pool Villa.*open|look open/);
+    const d = await chat(["i cancelled 2 days ago"]); expect(d.replies[0]).not.toMatch(/Which dates/);
+    const e = await chat(["25 dec to 27 dec 2 people", "budget under 5000"]);
+    expect(e.replies[1]).toMatch(/most affordable/);
+  });
 });

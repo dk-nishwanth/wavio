@@ -54,7 +54,7 @@ const upcoming = (name: string, from = isoToday()) => { const dow = new Date(fro
 
 /** Everything we can tell about the stay from one message. `waiting` is what the bot just asked for, which decides how a bare number is read. */
 export function extractStay(clean: string, o: { waiting?: "dates" | "nights" | "guests" | "rooms"; checkIn?: string } = {}): StaySlots {
-  const t = clean.toLowerCase().replace(/\s+/g, " ").trim();
+  const t = clean.toLowerCase().replace(/\s+/g, " ").trim().replace(/\d+\s*(?:days?|nights?|din|raat)\s+(?:ago|pehle|before|after|later|baad)\b/g, " ");
   const out: StaySlots = { notes: [] };
   const today = isoToday();
 
@@ -62,10 +62,12 @@ export function extractStay(clean: string, o: { waiting?: "dates" | "nights" | "
   const MON = "jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?";
   // "dec 24 to 26" → "24 dec to 26 dec"
   const t2 = t.replace(new RegExp(`\\b(${MON})\\s+(\\d{1,2})\\s*(?:to|till|until|-|se)\\s*(\\d{1,2})\\b(?!\\s*(?:${MON}))`), "$2 $1 to $3 $1");
+  // "dec 5 7" / "5 7 dec" (a dash that was turned into a space) → a range
+  const t1 = t2.replace(new RegExp(`\\b(${MON})\\s+(\\d{1,2})\\s+(\\d{1,2})\\b`), (m, mo, a, b) => (Number(b) > Number(a) ? `${a} ${mo} to ${b} ${mo}` : m)).replace(new RegExp(`\\b(\\d{1,2})\\s+(\\d{1,2})\\s+(${MON})\\b`), (m, a, b, mo) => (Number(b) > Number(a) ? `${a} ${mo} to ${b} ${mo}` : m));
   // "15 tarikh se" → the 15th of this month (or next if passed)
-  let t3 = t2;
-  const tk = /\b(\d{1,2})\s*(?:tarikh|tareekh|tarik|date)\b/.exec(t2);
-  if (tk) { const d = Number(tk[1]); const base = new Date(today + "T00:00:00Z"); let y = base.getUTCFullYear(), m = base.getUTCMonth(); if (d < base.getUTCDate()) { m += 1; if (m > 11) { m = 0; y += 1; } } t3 = t2.replace(tk[0], `${d} ${["jan","feb","mar","apr","may","jun","jul","aug","sep","oct","nov","dec"][m]} ${y}`); }
+  let t3 = t1;
+  const tk = /\b(\d{1,2})\s*(?:tarikh|tareekh|tarik|date)\b/.exec(t1);
+  if (tk) { const d = Number(tk[1]); const base = new Date(today + "T00:00:00Z"); let y = base.getUTCFullYear(), m = base.getUTCMonth(); if (d < base.getUTCDate()) { m += 1; if (m > 11) { m = 0; y += 1; } } t3 = t1.replace(tk[0], `${d} ${["jan","feb","mar","apr","may","jun","jul","aug","sep","oct","nov","dec"][m]} ${y}`); }
   const r = parseDateRange(t3);
   if (r.check_in) out.check_in = r.check_in;
   if (r.check_out) out.check_out = r.check_out;
