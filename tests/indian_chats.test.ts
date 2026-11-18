@@ -61,4 +61,16 @@ describe("average Indian guest chats", () => {
     expect((await chat(["I booked already, want to change my dates"])).last.handoff).toBe(true);
     expect((await chat(["15 tarikh se room chahiye"])).replies[0]).not.toMatch(/Which dates/);
   });
+  it("handles groups, family counts, menus by number, totals and thanks", async () => {
+    expect((await chat(["i m planing trip with my frnds 6 guys"])).replies[0]).toMatch(/6 guests/);
+    expect((await chat(["Looking for a place for my parents anniversary"])).replies[0]).toMatch(/2 guests/);
+    expect((await chat(["hi", "me my wife mom dad"])).replies[1]).toMatch(/4 guests|Which dates/);
+    const m = await chat(["hello", "1"]); expect(m.replies[1]).toMatch(/Safari Tent/);
+    expect((await chat(["how much for 2 nights"])).replies[0]).toMatch(/Deluxe Room.*₹16,000/);
+    const t = await chat(["25 dec to 27 dec 3 people tent", "yes", "what is the total"]);
+    expect(t.replies[2]).toMatch(/estimate is ₹/);
+    expect((await chat(["thank you so much, great service"])).replies[0]).toMatch(/welcome/i);
+    const l = await chat(["reach on friday leave sunday", "3 people", "tent", "what time can we check in friday"]);
+    expect(l.replies[3]).toMatch(/Check-in is from 12:00 PM/);
+  });
 });

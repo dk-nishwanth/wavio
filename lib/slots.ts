@@ -12,7 +12,7 @@ const num = (s: string | undefined) => (s ? Number(s) : undefined);
 export function parseParty(clean: string, bare = false): Party {
   const t = clean.toLowerCase();
   let adults = 0, kids = 0, adultsSeen = false, kidsSeen = false;
-  for (const m of t.matchAll(/(\d{1,2})\s*(?:adults?|grown ?ups|elders?|seniors?|men|women|ladies|gents)\b/g)) { adults += Number(m[1]); adultsSeen = true; }
+  for (const m of t.matchAll(/(\d{1,2})\s*(?:adults?|grown ?ups|elders?|seniors?|men|women|ladies|gents|guys|gentlemen)\b/g)) { adults += Number(m[1]); adultsSeen = true; }
   for (const m of t.matchAll(/(\d{1,2})\s*(?:kids?|children|child|infants?|babies|baby|toddlers?|bachhe|bacche|bacha|bachcha|bachha|baccha|boys?|girls?)\b/g)) { kids += Number(m[1]); kidsSeen = true; }
   for (const m of t.matchAll(/(\d{1,2})\s*couples?\b/g)) { adults += 2 * Number(m[1]); adultsSeen = true; }
   // an explicit total ("family of 4", "we are 5", "5 people") includes everyone, kids too
@@ -28,13 +28,15 @@ export function parseParty(clean: string, bare = false): Party {
     // "me and my wife", "me, my wife and 2 kids", "me and 3 friends"
     const me = /\b(me|i|myself|mai|main)\b/.test(t) || /\b(gf|bf|girlfriend|boyfriend|wife|husband|partner|spouse)\b/.test(t) && /\b(sath|saath|with)\b/.test(t);
     if (me && /\b(gf|bf|girlfriend|boyfriend|wife|husband|partner|spouse)\b/.test(t) && !/\bmy\s+(?:wife|husband|gf|bf|partner)/.test(t)) { /* "gf ke sath" = me + partner */ }
-    let n = me ? 1 : 0, found = false;
+    let n = me ? 1 : 0, found = false, solo = false, myRel = false;
+    const relNames = new Set((t.match(/\b(wife|husband|mom|dad|mother|father|son|daughter|brother|sister)\b/g) ?? []));
+    if (me && relNames.size && !/\d/.test(t)) { n += relNames.size; found = true; myRel = true; }
     for (const m of t.matchAll(new RegExp(`(\\d{1,2})\\s*(?:${REL})\\b`, "g"))) { n += Number(m[1]); found = true; }
-    for (const m of t.matchAll(new RegExp(`\\bmy\\s+(?:${REL})\\b`, "g"))) { const w = m[0]; n += /parents|in laws|inlaws|grandparents/.test(w) ? 2 : /friends|colleagues|cousins|relatives/.test(w) ? 0 : 1; found = true; }
+    if (!myRel) for (const m of t.matchAll(new RegExp(`\\bmy\\s+(?:${REL})\\b`, "g"))) { const w = m[0]; n += /parents|in laws|inlaws|grandparents/.test(w) ? 2 : /friends|colleagues|cousins|relatives/.test(w) ? 0 : 1; found = true; myRel = true; }
     if (/\b(couple|honeymoon|newly ?weds?)\b/.test(t) && !found) { n = 2; found = true; }
     if (!found && /\b(gf|bf|girlfriend|boyfriend|wife|husband|partner|spouse|friend)\b/.test(t) && /\b(sath|saath|with a|with my|with)\b/.test(t) && !/\bfriends\b/.test(t)) { n = 2; found = true; }
-    if (/\b(solo|alone|myself|just me|only me)\b/.test(t)) { n = 1; found = true; }
-    if (found && (me || /\bcouple\b/.test(t) || kidsSeen || adultsSeen)) total = n + (kidsSeen && !adultsSeen ? kids : 0) + (adultsSeen ? adults : 0) - (adultsSeen && me ? 0 : 0);
+    if (/\b(solo|alone|myself|just me|only me|single traveller|single traveler|by myself)\b/.test(t)) { n = 1; found = true; solo = true; }
+    if (found && (me || solo || myRel || /\bcouple\b/.test(t) || kidsSeen || adultsSeen)) total = n + (kidsSeen && !adultsSeen ? kids : 0) + (adultsSeen ? adults : 0) - (adultsSeen && me ? 0 : 0);
     if (total !== undefined && total < 1) total = undefined;
   }
   if (total === undefined && bare) { const m = /^(\d{1,2})$/.exec(t.trim()); if (m) total = Number(m[1]); }
@@ -83,6 +85,8 @@ export function extractStay(clean: string, o: { waiting?: "dates" | "nights" | "
   if (wr && !out.check_in) { out.check_in = upcoming(wr[1]); const dayDiff = (WD.indexOf(wr[2]) - WD.indexOf(wr[1]) + 7) % 7 || 7; out.check_out = addDays(out.check_in, dayDiff); }
   // "weekend" → Friday to Sunday, said out loud so the guest can correct it
   if (!out.check_in && /\bweekend\b/.test(t)) { const fri = upcoming("friday"); out.check_in = new Date(today + "T00:00:00Z").getUTCDay() === 5 ? today : fri; out.check_out = addDays(out.check_in, 2); out.notes.push("weekend = Fri to Sun"); }
+  const lv = new RegExp(`\\b(?:leave|leaving|checkout|check out|return|returning|depart|going back|back on)\\s+(?:on\\s+)?(${WD.join("|")})\\b`).exec(t);
+  if (lv && out.check_in && !out.check_out) { let co = upcoming(lv[1]); while (co <= out.check_in) co = addDays(co, 7); out.check_out = co; }
   if (out.check_in && !out.check_out && out.nights) out.check_out = addDays(out.check_in, out.nights);
   if (out.check_in && out.check_out) out.nights = diffDays(out.check_in, out.check_out);
   // a bare number when we asked "how many nights?" is the nights

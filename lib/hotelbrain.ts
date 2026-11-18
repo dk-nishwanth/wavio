@@ -41,7 +41,7 @@ export function understand(raw: string, clean: string, rooms: Room[]): Understan
     capacity: has(/\b(sleep|sleeps|capacity|accommodate|fits?|fit in|how many (people|guests|persons|adults))\b/),
     availability: has(/\b(available|availability|vacant|vacancy|free on|open on|is it free|any room|rooms free)\b/),
     details: has(/\b(tell me about|details|describe|description|what is|whats|features|private pool|view|bedroom|bedrooms|bathroom|size|beds?|ac|air conditioned)\b/),
-    suggest: has(/\b(suggest|recommend|recommendation|which (room|one|stay)|what should|advice|ideal|suitable|best (room|option|for)|good for|which is better)\b/),
+    suggest: has(/\b(suggest|recommend|recommendation|which (room|one|stay)|what should|advice|ideal|suitable|best (room|option|for)|good for|which is better|peaceful|private|quiet|romantic|something (nice|good|special))\b/),
     distance: has(/\b(how far|far|door|dur|distance|km|kms|how long|hours from|reach|nearest|airport|railway|station|bus stand|drive)\b/),
     discount: has(/\b(discount|discounts|offer|offers|deal|deals|cheaper|negotiate|best price|reduce|concession|coupon|promo|package deal)\b/),
     info: has(/\b(timings?|timing|open|close|closing|cost|costs|how much|price|allowed|allow|available|facilities|amenities|policy|rules?)\b/),
