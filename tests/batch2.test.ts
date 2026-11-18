@@ -158,7 +158,7 @@ describe("the Test page's pretend guest", () => {
     saveIndustry(ws, "resort", { name: "Jawai Retreat", address: "Jawai Dam Road" });
     run("INSERT INTO products (id, workspace_id, name, price, created_at) VALUES ('tp',?,?,?,?)", ws, "Safari Tent", 12000, now());
     const r = await handleGuest(ws, null, "pls tell rates for 20dec", { dry: true });
-    expect(r.debug).toMatchObject({ route: "intent: rooms", clean: "please tell rates for 20 dec" });
+    expect(r.debug).toMatchObject({ route: "booking", clean: "please tell rates for 20 dec" });
     expect(r.debug.intents[0].intent).toBe("rooms");
     expect(r.debug.dates.check_in).toMatch(/-12-20$/);
     expect(r.outputs.map((o) => (o.type === "text" ? "text" : o.tool))).toEqual(["text", "text"]); // the rates, then "which nights / how many guests?"

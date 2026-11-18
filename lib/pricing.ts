@@ -6,9 +6,9 @@ export type Priced = { price: number; weekend_price?: number | null; capacity?: 
 const isWeekend = (iso: string) => { const d = new Date(iso + "T00:00:00Z").getUTCDay(); return d === 5 || d === 6; }; // Friday and Saturday nights
 
 /** Price for a stay: nightly rate (weekend rate on Fri/Sat nights when set), times the rooms needed for the group. */
-export function estimate(p: Priced, checkIn: string, checkOut: string, guests: number) {
+export function estimate(p: Priced, checkIn: string, checkOut: string, guests: number, roomsWanted?: number) {
   const nights = Math.max(0, diffDays(checkIn, checkOut));
-  const rooms = Math.max(1, Math.ceil((guests || 1) / Math.max(1, p.capacity ?? 2)));
+  const rooms = Math.max(1, Math.ceil((guests || 1) / Math.max(1, p.capacity ?? 2)), roomsWanted ?? 0);
   let perRoom = 0, weekendNights = 0;
   for (let i = 0; i < nights; i++) {
     const day = addDays(checkIn, i);

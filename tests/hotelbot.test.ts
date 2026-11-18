@@ -70,8 +70,8 @@ describe("conversations (no AI involved)", () => {
   it("greets by name and offers the menu", async () => {
     const c = guest("919300000001", "hello");
     const r = await say(c, "hello");
-    expect(r.replies[0]).toBe("Hello Asha! Welcome to Jawai Retreat 🌿 How can I help you today?");
-    expect(sent(c.id).map((m) => m.type)).toEqual(["text", "list"]);
+    expect(r.replies[0]).toContain("Hello Asha! Welcome to Jawai Retreat 🌿 How can I help you today?");
+    expect(sent(c.id).map((m) => m.type)).toEqual(["list"]);
   });
   it("shows rooms and rates straight from the catalog", async () => {
     const c = guest("919300000002");
@@ -108,8 +108,8 @@ describe("conversations (no AI involved)", () => {
     const c = guest("919300000005");
     await say(c, `book ${label(D1)} to ${label(D2)}`); await say(c, "3 guests"); await say(c, "Safari Tent");
     const r = await say(c, "no");
-    expect(r.replies[0]).toMatch(/start again/);
-    expect(r.state.slots).toEqual({});
+    expect(r.replies[0]).toMatch(/what would you like to change/);
+    expect(r.state.step).toBe("book_edit");
   });
   it("asks again when the date has passed", async () => {
     const c = guest("919300000006");

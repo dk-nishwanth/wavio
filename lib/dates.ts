@@ -1,3 +1,4 @@
+import { parseParty } from "./slots";
 // Dates are handled as YYYY-MM-DD strings in the business's local time.
 const MONTHS = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
 const pad = (n: number) => String(n).padStart(2, "0");
@@ -70,14 +71,7 @@ export function parseDateRange(text: string): { check_in?: string; check_out?: s
   return out;
 }
 
-/** "4 people", "2 adults 1 kid", "family of 5", "we are 3". Returns total guests, or null. */
+/** Total head-count in a message (see slots.parseParty). Kept here because many callers import it with the date helpers. */
 export function parseGuests(text: string, bare = false): number | null {
-  const t = String(text ?? "").toLowerCase();
-  let total = 0, hit = false;
-  for (const m of t.matchAll(/(\d{1,2})\s*(?:adults?|kids?|child(?:ren)?|infants?|people|persons?|guests?|pax|members?|log|bachche|bacche)\b/g)) { total += Number(m[1]); hit = true; }
-  if (hit) return Math.min(total, 60);
-  const fam = t.match(/(?:family of|group of|party of|we are|we r|hum)\s*(\d{1,2})/);
-  if (fam) return Number(fam[1]);
-  if (bare) { const n = t.trim().match(/^(\d{1,2})$/); if (n) return Number(n[1]); }
-  return null;
+  return parseParty(String(text ?? ""), bare).total ?? null;
 }

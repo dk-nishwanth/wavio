@@ -121,7 +121,7 @@ describe("real messages from real guests", () => {
     const base = await handleGuest(ws, null, "book room 20 dec to 22 dec for 2 ppl safari tnt", { dry: true });
     expect(base.state.step).toBe("book_confirm");
     for (const yes of ["yess", "ok pls send", "haan ji", "ya sure", "yep"]) { const r = await handleGuest(ws, null, yes, { dry: true, state: base.state }); expect(r.replies[0], yes).toMatch(/sent your request/); }
-    for (const no of ["nahi", "nope", "change it"]) { const r = await handleGuest(ws, null, no, { dry: true, state: base.state }); expect(r.replies[0], no).toMatch(/start again/); }
+    for (const no of ["nahi", "nope", "change it"]) { const r = await handleGuest(ws, null, no, { dry: true, state: base.state }); expect(r.replies[0], no).toMatch(/what would you like to change/); }
   });
   it("does not 'fix' ordinary words into hotel words", async () => {
     const r = await top("my name is Rohit and I live in Pune");
