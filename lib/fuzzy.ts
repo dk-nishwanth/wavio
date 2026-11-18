@@ -30,7 +30,7 @@ const SLANG: Record<string, string> = {
   rm: "room", rms: "rooms", rooom: "room", bkng: "booking", bkg: "booking", bking: "booking", bokking: "booking", boking: "booking", resrv: "reserve", avl: "available", avail: "available", availble: "available", avilable: "available", availabilty: "availability", availablity: "availability",
   chk: "check", chkin: "check in", chkout: "check out", cancl: "cancel", cncl: "cancel", cancle: "cancel", cancelation: "cancellation",
   n: "and", nd: "and", msg: "message", info: "information", dtls: "details", rqst: "request", req: "request", reqd: "required", rqd: "required",
-  ppl: "people", peple: "people", persn: "person", pax: "people", adlt: "adult", adlts: "adults", adult: "adults", kid: "kids", chld: "child", chldrn: "children", bachhe: "kids", bachche: "kids", bacche: "kids", bache: "kids", baccha: "kids", bachha: "kids", log: "people", logon: "people", members: "people", member: "people",
+  ppl: "people", peple: "people", persn: "person", pax: "people", adlt: "adult", adlts: "adults", adult: "adults", kid: "kids", chld: "child", chldrn: "children", tonite: "tonight", tonit: "tonight", tnite: "tonight", nyt: "night", dog: "pets", dogs: "pets", puppy: "pets", cat: "pets", pet: "pets", bachhe: "kids", bacha: "kids", bachcha: "kids", bachchon: "kids", bachho: "kids", bachche: "kids", bacche: "kids", bache: "kids", baccha: "kids", bachha: "kids", log: "people", logo: "people", logon: "people", members: "people", member: "people",
   nt: "night", nts: "nights", nite: "night", nites: "nights", raat: "nights", raatein: "nights", din: "days", dino: "days",
   wid: "with", wit: "with", dis: "this", dat: "that", wen: "when", whn: "when", wher: "where", whr: "where", cn: "can", cud: "could", shud: "should", wud: "would", dnt: "dont", cant: "cant", wana: "want", wanna: "want", gonna: "going",
   b4: "before", bcz: "because", bcoz: "because", coz: "because", cuz: "because", frnd: "friend", frnds: "friends", gf: "friend", bf: "friend", fam: "family", trp: "trip",
@@ -96,6 +96,7 @@ export function normalizeMessage(text: string, v: { vocab: Set<string>; byFirst:
   let t = String(text ?? "").toLowerCase().replace(/[’‘`´]/g, "'").replace(/[‍️]/g, "");
   t = t.replace(/(\p{L})\1{2,}/gu, "$1$1");                                  // hellooo → helloo
   for (const [re, rep] of SLANG_PHRASES) t = t.replace(re, rep);
+  t = t.replace(/(\d+(?:\.\d+)?)\s*k\b/g, (_m, n) => String(Math.round(Number(n) * 1000)));  // 10k → 10000
   t = t.replace(/(\d)(st|nd|rd|th)\b/g, "$1");                                  // 20th → 20
   t = t.replace(/(\d)\s*n\b/g, "$1 nights");                                    // 3n → 3 nights
   t = t.replace(/(\d)([a-zऀ-ॿ])/g, "$1 $2").replace(/([a-zऀ-ॿ])(\d)/g, "$1 $2"); // 20dec → 20 dec

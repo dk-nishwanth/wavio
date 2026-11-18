@@ -13,10 +13,10 @@ export function parseParty(clean: string, bare = false): Party {
   const t = clean.toLowerCase();
   let adults = 0, kids = 0, adultsSeen = false, kidsSeen = false;
   for (const m of t.matchAll(/(\d{1,2})\s*(?:adults?|grown ?ups|elders?|seniors?|men|women|ladies|gents)\b/g)) { adults += Number(m[1]); adultsSeen = true; }
-  for (const m of t.matchAll(/(\d{1,2})\s*(?:kids?|children|child|infants?|babies|baby|toddlers?|bachhe|bacche|boys?|girls?)\b/g)) { kids += Number(m[1]); kidsSeen = true; }
+  for (const m of t.matchAll(/(\d{1,2})\s*(?:kids?|children|child|infants?|babies|baby|toddlers?|bachhe|bacche|bacha|bachcha|bachha|baccha|boys?|girls?)\b/g)) { kids += Number(m[1]); kidsSeen = true; }
   for (const m of t.matchAll(/(\d{1,2})\s*couples?\b/g)) { adults += 2 * Number(m[1]); adultsSeen = true; }
   // an explicit total ("family of 4", "we are 5", "5 people") includes everyone, kids too
-  const totalRe = [/\b(?:family|group|party|team|gang)\s*(?:of|size)?\s*(\d{1,2})\b/, /\b(?:we are|we r|were|there are|total|hum)\s*(\d{1,2})\b/, /\b(\d{1,2})\s*(?:of us|people|persons?|guests?|pax|members?|log|heads|travellers|travelers|persons)\b/, /\bfor\s*(\d{1,2})\s*(?:people|persons?|guests?|pax|adults)\b/];
+  const totalRe = [/\b(?:family|group|party|team|gang)\s*(?:of|size)?\s*(\d{1,2})\b/, /\b(?:we are|we r|were|there are|total|hum)\s*(\d{1,2})\b/, /\b(\d{1,2})\s*(?:of us|people|persons?|guests?|pax|members?|log|heads|travellers|travelers|persons)\b/, /\bfor\s*(\d{1,2})\s*(?:people|persons?|guests?|pax|adults)\b/, /\b(?:guests?|people|persons?|members?|pax|head ?count)\s*(?:to|=|:|are|is|will be)?\s*(\d{1,2})\b/];
   let total: number | undefined;
   for (const re of totalRe) { const m = re.exec(t); if (m) { total = Number(m[1]); break; } }
   const partsTotal = adults + kids;
@@ -41,7 +41,7 @@ export function parseParty(clean: string, bare = false): Party {
 
 /** "2 rooms", "one room", "3 villas". */
 export function parseRooms(clean: string): number | undefined {
-  const m = /(\d{1,2})\s*(?:rooms?|villas?|tents?|cottages?|suites?|units?)\b/.exec(clean.toLowerCase());
+  const m = /(\d{1,2})\s*(?:ro+m+s?|villas?|tents?|cottages?|suites?|units?)\b/.exec(clean.toLowerCase());
   return m ? Math.min(Number(m[1]), 20) : undefined;
 }
 
@@ -55,7 +55,10 @@ export function extractStay(clean: string, o: { waiting?: "dates" | "nights" | "
   const today = isoToday();
 
   // --- dates ---
-  const r = parseDateRange(t);
+  const MON = "jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?";
+  // "dec 24 to 26" → "24 dec to 26 dec"
+  const t2 = t.replace(new RegExp(`\\b(${MON})\\s+(\\d{1,2})\\s*(?:to|till|until|-|se)\\s*(\\d{1,2})\\b(?!\\s*(?:${MON}))`), "$2 $1 to $3 $1");
+  const r = parseDateRange(t2);
   if (r.check_in) out.check_in = r.check_in;
   if (r.check_out) out.check_out = r.check_out;
   if (/\btonight\b/.test(t) && !out.check_in) out.check_in = today;
