@@ -26,11 +26,13 @@ export function parseParty(clean: string, bare = false): Party {
   }
   if (total === undefined) {
     // "me and my wife", "me, my wife and 2 kids", "me and 3 friends"
-    const me = /\b(me|i|myself|mai|main)\b/.test(t);
+    const me = /\b(me|i|myself|mai|main)\b/.test(t) || /\b(gf|bf|girlfriend|boyfriend|wife|husband|partner|spouse)\b/.test(t) && /\b(sath|saath|with)\b/.test(t);
+    if (me && /\b(gf|bf|girlfriend|boyfriend|wife|husband|partner|spouse)\b/.test(t) && !/\bmy\s+(?:wife|husband|gf|bf|partner)/.test(t)) { /* "gf ke sath" = me + partner */ }
     let n = me ? 1 : 0, found = false;
     for (const m of t.matchAll(new RegExp(`(\\d{1,2})\\s*(?:${REL})\\b`, "g"))) { n += Number(m[1]); found = true; }
     for (const m of t.matchAll(new RegExp(`\\bmy\\s+(?:${REL})\\b`, "g"))) { const w = m[0]; n += /parents|in laws|inlaws|grandparents/.test(w) ? 2 : /friends|colleagues|cousins|relatives/.test(w) ? 0 : 1; found = true; }
     if (/\b(couple|honeymoon|newly ?weds?)\b/.test(t) && !found) { n = 2; found = true; }
+    if (!found && /\b(gf|bf|girlfriend|boyfriend|wife|husband|partner|spouse|friend)\b/.test(t) && /\b(sath|saath|with a|with my|with)\b/.test(t) && !/\bfriends\b/.test(t)) { n = 2; found = true; }
     if (/\b(solo|alone|myself|just me|only me)\b/.test(t)) { n = 1; found = true; }
     if (found && (me || /\bcouple\b/.test(t) || kidsSeen || adultsSeen)) total = n + (kidsSeen && !adultsSeen ? kids : 0) + (adultsSeen ? adults : 0) - (adultsSeen && me ? 0 : 0);
     if (total !== undefined && total < 1) total = undefined;
@@ -58,7 +60,11 @@ export function extractStay(clean: string, o: { waiting?: "dates" | "nights" | "
   const MON = "jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?";
   // "dec 24 to 26" → "24 dec to 26 dec"
   const t2 = t.replace(new RegExp(`\\b(${MON})\\s+(\\d{1,2})\\s*(?:to|till|until|-|se)\\s*(\\d{1,2})\\b(?!\\s*(?:${MON}))`), "$2 $1 to $3 $1");
-  const r = parseDateRange(t2);
+  // "15 tarikh se" → the 15th of this month (or next if passed)
+  let t3 = t2;
+  const tk = /\b(\d{1,2})\s*(?:tarikh|tareekh|tarik|date)\b/.exec(t2);
+  if (tk) { const d = Number(tk[1]); const base = new Date(today + "T00:00:00Z"); let y = base.getUTCFullYear(), m = base.getUTCMonth(); if (d < base.getUTCDate()) { m += 1; if (m > 11) { m = 0; y += 1; } } t3 = t2.replace(tk[0], `${d} ${["jan","feb","mar","apr","may","jun","jul","aug","sep","oct","nov","dec"][m]} ${y}`); }
+  const r = parseDateRange(t3);
   if (r.check_in) out.check_in = r.check_in;
   if (r.check_out) out.check_out = r.check_out;
   if (/\btonight\b/.test(t) && !out.check_in) out.check_in = today;

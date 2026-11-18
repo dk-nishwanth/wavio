@@ -11,7 +11,7 @@ beforeAll(() => {
   ({ ws } = makeWorkspace());
   saveIndustry(ws, "resort", { name: "Jawai Retreat", address: "Jawai Dam Road, Rajasthan", check_in_time: "12:00 PM", check_out_time: "11:00 AM" });
   run("INSERT INTO products (id, workspace_id, name, price, description, capacity, created_at) VALUES ('p1',?,?,?,?,?,?),('p2',?,?,?,?,?,?),('p3',?,?,?,?,?,?)", ws, "Safari Tent", 12000, "Tent with bath", 3, now(), ws, "Pool Villa", 25000, "Private pool", 6, now(), ws, "Deluxe Room", 8000, "AC room", 2, now());
-  addText(ws, "Facilities", "Pets are welcome with prior notice. Free parking. Vegetarian and Jain food available. Free wifi. Leopard safari can be arranged. Nearest airport is Udaipur, 150 km.");
+  addText(ws, "Facilities", "Pets are welcome with prior notice. Free parking. Vegetarian and Jain food available. Free wifi. 50% advance is needed to confirm the booking. Cancellation is free up to 7 days before check in. Leopard safari can be arranged. Nearest airport is Udaipur, 150 km.");
 });
 async function chat(msgs: string[]) {
   const phone = "9198" + String(10000000 + n++);
@@ -43,10 +43,22 @@ describe("average Indian guest chats", () => {
   it("handles refund, status and policy questions without starting a booking", async () => {
     const a = await chat(["refund kab milega"]); expect(a.replies[0]).toMatch(/refund/); expect(a.last.handoff).toBe(true);
     expect((await chat(["booking status"])).replies[0]).toMatch(/can't see any bookings|booking/);
-    expect((await chat(["what is cancellation policy"])).last.handoff).toBe(true);
+    expect((await chat(["what is cancellation policy"])).replies[0]).toMatch(/free up to 7 days/);
   });
   it("reminds instead of re-asking when the guest says they already told", async () => {
     const r = await chat(["25 dec to 27 dec 3 people", "i already told the dates"]);
     expect(r.replies[1]).toMatch(/I have 25 Dec/);
+  });
+  it("answers policy, price pushback, comparisons and partner/slang wording", async () => {
+    expect((await chat(["hi i want to know about advance payment"])).replies[0]).toMatch(/50% advance/);
+    expect((await chat(["cancellation free hai?"])).replies[0]).toMatch(/free up to 7 days/);
+    const p = await chat(["2 adults 25 dec to 27 dec", "too costly"]);
+    expect(p.replies[1]).toMatch(/most affordable/);
+    const c = await chat(["book 20 dec to 22 dec 3 people", "deluxe or tent which is better?"]);
+    expect(c.replies[1]).toMatch(/Safari Tent/);
+    const g = await chat(["room hai kya 14 feb ko", "gf ke sath"]);
+    expect(g.replies[1]).toMatch(/2 guests/);
+    expect((await chat(["I booked already, want to change my dates"])).last.handoff).toBe(true);
+    expect((await chat(["15 tarikh se room chahiye"])).replies[0]).not.toMatch(/Which dates/);
   });
 });
