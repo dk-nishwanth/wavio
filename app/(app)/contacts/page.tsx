@@ -10,7 +10,7 @@ export default function Contacts() {
   const rows = (data ?? []).filter((c) => `${c.name ?? ""} ${c.phone} ${c.email ?? ""} ${c.tags.join(" ")}`.toLowerCase().includes(q.toLowerCase()));
   return (
     <>
-      <h1>Contacts</h1><p className="muted mb">{data?.length ?? 0} contacts. Messages go only to contacts who have opted in.</p>
+      <a className="btn ghost" href="/api/export/contacts" style={{ float: "right" }}>Download CSV</a><h1>Contacts</h1><p className="muted mb">{data?.length ?? 0} contacts. Messages go only to contacts who have opted in.</p>
       <div className="grid mb">
         <div className="card">
           <h2>Add contact</h2>

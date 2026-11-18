@@ -168,7 +168,9 @@ const botVocab = (ws: string) => cachedVocab(`bot:${ws}`, () => {
 
 // ---------- the conversation ----------
 type State = { step?: string; slots: Record<string, any>; misses: number; lang?: "hi" };
-export type BotOut = { replies: string[]; steps: Step[]; handoff: boolean; unknown: boolean; state: State };
+export type BotOutput = { type: "text"; text: string } | { type: "tool"; tool: string; input: any; ok: boolean; result: string };
+export type BotDebug = { clean: string; intents: { intent: string; score: number }[]; dates: any; guests: number | null; lang: string; step?: string; route: string };
+export type BotOut = { replies: string[]; steps: Step[]; outputs: BotOutput[]; debug: BotDebug; handoff: boolean; unknown: boolean; state: State };
 
 
 const loadState = (contactId: string): State => { const r = get<any>("SELECT * FROM bot_state WHERE contact_id=?", contactId); if (!r) return { slots: {}, misses: 0 }; const { __lang, ...slots } = JSON.parse(r.slots); return { step: r.step ?? undefined, slots, misses: r.misses, lang: __lang }; };
@@ -189,17 +191,17 @@ export async function handleGuest(ws: string, contactId: string | null, text: st
   if (hasDevanagari(text)) st.lang = "hi"; else if (/[a-z]{3,}/i.test(text)) st.lang = undefined; // follows the language the guest is using
   const R = getReplies(ws, st.lang), biz = getBusiness(ws);
   const MENU = st.lang === "hi" ? MENU_HI : MENU_EN;
-  const out: BotOut = { replies: [], steps: [], handoff: false, unknown: false, state: st };
+  const out: BotOut = { replies: [], steps: [], outputs: [], debug: { clean: "", intents: [], dates: {}, guests: null, lang: st.lang ?? "en", step: st.step, route: "" }, handoff: false, unknown: false, state: st };
+  const emit = (msg: string) => { out.replies.push(msg); out.outputs.push({ type: "text", text: msg }); if (!dry) queueText(ws, contactId!, msg, { ai: true }); };
   const contact = contactId ? get<any>("SELECT name FROM contacts WHERE id=?", contactId) : null;
   const first = contact?.name ? ` ${String(contact.name).split(" ")[0]}` : "";
   const base = { name: first, resort: biz.name || "our resort", address: biz.address || biz.location || "", check_in_time: biz.check_in_time || "12:00 PM", check_out_time: biz.check_out_time || "11:00 AM", hours_note: hoursNote(ws) };
   const say = (key: string, extra: Record<string, any> = {}) => {
     const msg = fill(R[key] ?? key, { ...base, ...st.slots, ...extra }).replace(/ +\n/g, "\n").trim();
     if (!msg) return;
-    out.replies.push(msg);
-    if (!dry) queueText(ws, contactId!, msg, { ai: true });
+    emit(msg);
   };
-  const tool = async (name: string, input: Record<string, any>) => { const result = await runTool(ctx, name, input); out.steps.push({ tool: name, input, ok: !result.startsWith("error"), result }); return result; };
+  const tool = async (name: string, input: Record<string, any>) => { const result = await runTool(ctx, name, input); const ok = !result.startsWith("error"); out.steps.push({ tool: name, input, ok, result }); out.outputs.push({ type: "tool", tool: name, input, ok, result }); return result; };
   const menu = async () => tool("send_menu", { body: R.menu_body, button: "Choose", options: MENU });
   const products = () => all<any>("SELECT id, name, price, description, capacity, units, weekend_price, meal_plan FROM products WHERE workspace_id=? AND active=1 ORDER BY price", ws);
   const finish = () => { if (!dry && contactId) saveState(ws, contactId, st); return out; };
@@ -212,6 +214,7 @@ export async function handleGuest(ws: string, contactId: string | null, text: st
   const intents = detectIntents(clean);
   const top = intents[0];
   const range = parseDateRange(clean);
+  out.debug = { clean, intents: intents.slice(0, 4), dates: range, guests: parseGuests(clean), lang: st.lang ?? "en", step: st.step, route: st.step ? `continuing: ${st.step}` : "" };
 
   async function continueStep() {
     switch (st.step) {
@@ -329,12 +332,14 @@ export async function handleGuest(ws: string, contactId: string | null, text: st
     if (!urgent) {
       const faq = matchFaq(ws, clean, vocab);
       if (faq) {
+        out.debug.route = `your answer for: ${faq.keywords}`;
         run("UPDATE bot_faqs SET hits=hits+1 WHERE id=?", faq.id);
-        const msg = fill(faq.answer, base); out.replies.push(msg); if (!dry) queueText(ws, contactId!, msg, { ai: true });
+        emit(fill(faq.answer, base));
         if (faq.asset_label) await tool("send_file", { label: faq.asset_label });
         st.misses = 0; return;
       }
     }
+    if (!out.debug.route && top) out.debug.route = `intent: ${top.intent}`;
     const wantsStay = (top?.intent === "booking" || (top?.intent === "rooms" && (range.check_in || parseGuests(clean)))) || (range.check_in && range.check_out);
     if (top?.intent === "complaint") { await tool("create_request", { kind: "complaint", summary: text.slice(0, 200) }); await handoff("Guest is unhappy: " + text.slice(0, 120)); say("complaint"); return; }
     if (top?.intent === "human") { await handoff("Guest asked to speak to a person"); say("human"); return; }
@@ -384,10 +389,10 @@ export async function handleGuest(ws: string, contactId: string | null, text: st
 
     // nothing matched: try the knowledge base, then offer the menu, then a person
     const kb = answerFromKnowledge(ws, clean);
-    if (kb) { say("info_prefix"); out.replies.push(kb); if (!dry) queueText(ws, contactId!, kb, { ai: true }); st.misses = 0; return; }
+    if (kb) { out.debug.route = "answer found in your knowledge"; say("info_prefix"); emit(kb); st.misses = 0; return; }
     st.misses += 1;
     if (o.deferUnknown) { out.unknown = true; return; }
-    out.unknown = true;
+    out.unknown = true; out.debug.route = "not understood";
     if (!dry) recordMiss(ws, text);
     if (st.misses >= 2) { await handoff("The hotel bot couldn't understand the guest twice"); say("unknown_handoff"); return; }
     say("unknown"); await menu();
@@ -398,7 +403,7 @@ export async function handleGuest(ws: string, contactId: string | null, text: st
     if (!ps.length) { say("rooms_none"); return; }
     const lines = ps.map((p) => `• *${p.name}* — ${inr(p.price)}/night${p.weekend_price ? ` (${inr(p.weekend_price)} Fri–Sat)` : ""}\n  Sleeps ${p.capacity}${p.meal_plan ? ` · ${p.meal_plan}` : ""}${p.description ? `\n  ${p.description}` : ""}`).join("\n");
     const msg = `${fill(R.rooms_header, base)}\n\n${lines}${R.rooms_footer ? `\n\n${fill(R.rooms_footer, base)}` : ""}`;
-    out.replies.push(msg); if (!dry) queueText(ws, contactId!, msg, { ai: true });
+    emit(msg);
     if (offerBooking) await tool("quick_replies", { text: "Would you like to check availability?", options: ["Check availability", "Photos", "Talk to our team"] });
   }
 

@@ -275,21 +275,30 @@ export async function answerInbound(ws: string, contactId: string, messageId: st
   if (limit && repliesThisMonth(ws) >= limit) return handoff(ws, contactId, "AI reply limit for this month reached");
   if ((get<any>("SELECT COUNT(*) n FROM messages WHERE contact_id=? AND ai=1 AND created_at > ?", contactId, now() - 3600_000)!.n as number) >= 20) return handoff(ws, contactId, "The AI replied 20 times in an hour — a person should take over");
   try {
-    if (a.engine === "rules" || (a.engine === "hybrid" && !aiConfigured(ws))) {
-      const { handleGuest } = await import("./hotelbot");
-      const text = get<any>("SELECT body FROM messages WHERE id=?", messageId)?.body ?? "";
-      const r = await handleGuest(ws, contactId, text);
-      if (r.handoff) handoff(ws, contactId, "The hotel bot passed this chat to a person");
-    } else if (a.engine === "hybrid") {
-      const { handleGuest } = await import("./hotelbot");
-      const text = get<any>("SELECT body FROM messages WHERE id=?", messageId)?.body ?? "";
-      const r = await handleGuest(ws, contactId, text, { deferUnknown: true });
-      if (r.unknown) await runConcierge(ws, contactId); // the bot didn't recognise it: let the AI try
-    } else await runConcierge(ws, contactId);
+    const text = get<any>("SELECT body FROM messages WHERE id=?", messageId)?.body ?? "";
+    await runEngine(ws, a, contactId, text);
   } catch (e: any) {
     console.error("concierge failed", e);
     handoff(ws, contactId, e instanceof LlmError ? `AI unavailable: ${e.message}` : "The AI concierge hit an error on this message");
   }
+}
+
+/** Runs whichever brain is selected (hotel bot, AI, or hotel bot with AI fallback) on one guest message. Used by the live worker and the Test page. */
+export async function runEngine(ws: string, a: Agent, contactId: string, text: string): Promise<{ debug?: import("./hotelbot").BotDebug }> {
+  if (a.engine === "rules" || (a.engine === "hybrid" && !aiConfigured(ws))) {
+    const { handleGuest } = await import("./hotelbot");
+    const r = await handleGuest(ws, contactId, text);
+    if (r.handoff) handoff(ws, contactId, "The hotel bot passed this chat to a person");
+    return { debug: r.debug };
+  }
+  if (a.engine === "hybrid") {
+    const { handleGuest } = await import("./hotelbot");
+    const r = await handleGuest(ws, contactId, text, { deferUnknown: true });
+    if (r.unknown) await runConcierge(ws, contactId); // the bot didn't recognise it: let the AI try
+    return { debug: r.debug };
+  }
+  await runConcierge(ws, contactId);
+  return {};
 }
 
 function handoff(ws: string, contactId: string, reason: string) {

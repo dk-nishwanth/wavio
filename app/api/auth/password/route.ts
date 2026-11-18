@@ -1,4 +1,5 @@
 import { get, run } from "@/lib/db";
+import { audit } from "@/lib/audit";
 import { COOKIE, hashPassword, makeSession, requireSession, verifyPassword, HttpError } from "@/lib/auth";
 import { handle, json } from "@/lib/http";
 import { hit } from "@/lib/ratelimit";
@@ -13,6 +14,7 @@ export const POST = handle(async (req: Request) => {
   if (String(next ?? "").length < 8) throw new HttpError(400, "New password must be at least 8 characters");
   const version = (u.session_version ?? 0) + 1;
   run("UPDATE users SET password_hash=?, session_version=? WHERE id=?", hashPassword(next), version, s.userId);
+  audit(s, "password.change");
   const res = json({ ok: true });
   res.cookies.set("session", makeSession(s.userId, version), COOKIE);
   return res;

@@ -1,4 +1,5 @@
 import { all, run } from "@/lib/db";
+import { audit } from "@/lib/audit";
 import { requireSession } from "@/lib/auth";
 import { handle, json } from "@/lib/http";
 import { createKey } from "@/lib/apikeys";
@@ -13,6 +14,7 @@ export const POST = handle(async (req: Request) => {
   const s = await requireSession();
   const b = await req.json();
   const key = createKey(s.workspaceId, b.kind === "secret" ? "secret" : "public", b.label || "API key", b.origins ?? []);
+  audit(s, "apikey.create", `${b.kind ?? "public"} key`);
   return json({ key }); // the only time the full key is returned
 });
 
@@ -27,5 +29,6 @@ export const DELETE = handle(async (req: Request) => {
   const s = await requireSession();
   const { id } = await req.json();
   run("DELETE FROM api_keys WHERE id=? AND workspace_id=?", id, s.workspaceId);
+  audit(s, "apikey.revoke", id);
   return json({ ok: true });
 });

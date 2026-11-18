@@ -22,6 +22,8 @@ export default function Settings() {
         <button className="btn mt" onClick={async () => { await api("/api/settings", "PUT", f); setF({ phoneNumberId: "", wabaId: "", token: "", appSecret: "" }); setMsg("Saved"); reload(); }}>Save</button> <span className="muted">{msg}</span>
       </div>
       <AccountCard />
+      <AlertsCard />
+      <DataCard />
       {data && <BusinessCard data={data} reload={reload} />}
       {data && <PaymentsCard data={data.payments} reload={reload} />}
       {data && <MetaCard data={data.meta} reload={reload} devTools={data.devTools} />}
@@ -148,6 +150,49 @@ function AccountCard() {
       <div className="row"><div className="grow"><label>Current password</label><input type="password" value={f.current} onChange={(e) => setF({ ...f, current: e.target.value })} /></div>
         <div className="grow"><label>New password (8+ characters)</label><input type="password" value={f.next} onChange={(e) => setF({ ...f, next: e.target.value })} /></div></div>
       <div className="row mt"><button className="btn" disabled={!f.current || f.next.length < 8} onClick={async () => { try { await api("/api/auth/password", "POST", f); setF({ current: "", next: "" }); setMsg("Password changed. Other devices were signed out."); } catch (e: any) { setMsg(e.message); } }}>Change password</button><span className="muted small">{msg}</span></div>
+    </div>
+  );
+}
+
+function AlertsCard() {
+  const { data, reload } = useApi<any>("/api/alerts");
+  const [e, setE] = useState<any>(null); const [t, setT] = useState<any>({ bot_token: "", chat_id: "" }); const [msg, setMsg] = useState("");
+  if (!data) return null;
+  const em = e ?? { host: data.email?.host ?? "", port: data.email?.port ?? 587, secure: !!data.email?.secure, user: data.email?.user ?? "", pass: "", from: data.email?.from ?? "", to: (data.email?.to ?? []).join(", ") };
+  const save = async (body: object) => { try { await api("/api/alerts", "PUT", body); setMsg("Saved"); setE(null); reload(); } catch (x: any) { setMsg(x.message); } };
+  const test = async (digest = false) => { const r = await api("/api/alerts/test", "POST", { digest }); setMsg(!r.configured ? "Set up email or Telegram first" : r.results.map((x: any) => `${x.channel}: ${x.ok ? "sent ✓" : x.error}`).join(" · ")); };
+  return (
+    <div className="card mt" style={{ maxWidth: 620 }}>
+      <h2>Alerts</h2>
+      <p className="muted small">Get told when a guest needs a person or a request is waiting, and receive a short summary each morning (arrivals, departures, what needs a decision).</p>
+      <h2 style={{ marginTop: 10 }}>Email</h2>
+      <div className="row"><div className="grow"><label>Mail server</label><input value={em.host} onChange={(x) => setE({ ...em, host: x.target.value })} placeholder="smtp.gmail.com" /></div><div style={{ width: 90 }}><label>Port</label><input type="number" value={em.port} onChange={(x) => setE({ ...em, port: Number(x.target.value) })} /></div><label className="row small" style={{ marginTop: 24 }}><input type="checkbox" checked={em.secure} onChange={(x) => setE({ ...em, secure: x.target.checked })} /> SSL (port 465)</label></div>
+      <div className="row"><div className="grow"><label>Username</label><input value={em.user} onChange={(x) => setE({ ...em, user: x.target.value })} /></div><div className="grow"><label>Password / app password {data.email?.hasPass && <span className="pill ok">saved</span>}</label><input type="password" value={em.pass} onChange={(x) => setE({ ...em, pass: x.target.value })} /></div></div>
+      <div className="row"><div className="grow"><label>From</label><input value={em.from} onChange={(x) => setE({ ...em, from: x.target.value })} placeholder="Wavio <alerts@yourresort.com>" /></div><div className="grow"><label>Send to (comma-separated)</label><input value={em.to} onChange={(x) => setE({ ...em, to: x.target.value })} /></div></div>
+      <div className="row mt"><button className="btn" onClick={() => save({ email: em })}>Save email</button>{data.email && <a className="small muted" style={{ cursor: "pointer" }} onClick={() => save({ clear: "email" })}>remove</a>}</div>
+      <h2 style={{ marginTop: 16 }}>Telegram {data.telegram && <span className="pill ok">connected</span>}</h2>
+      <p className="muted small">Create a bot with @BotFather, send it a message, then paste its token and your chat ID.</p>
+      <div className="row"><div className="grow"><label>Bot token</label><input type="password" value={t.bot_token} onChange={(x) => setT({ ...t, bot_token: x.target.value })} placeholder={data.telegram ? "saved — leave blank to keep" : ""} /></div><div className="grow"><label>Chat ID</label><input value={t.chat_id || data.telegram?.chat_id || ""} onChange={(x) => setT({ ...t, chat_id: x.target.value })} /></div></div>
+      <div className="row mt"><button className="btn" onClick={() => save({ telegram: { bot_token: t.bot_token, chat_id: t.chat_id || data.telegram?.chat_id } })}>Save Telegram</button>{data.telegram && <a className="small muted" style={{ cursor: "pointer" }} onClick={() => save({ clear: "telegram" })}>remove</a>}</div>
+      <h2 style={{ marginTop: 16 }}>What to send</h2>
+      {[["requests", "New requests and complaints"], ["handoffs", "Guests who need a person"], ["digest", "Morning summary"]].map(([k, l]) => <label key={k} className="row small" style={{ margin: 0 }}><input type="checkbox" checked={data.on[k] !== false} onChange={(x) => save({ on: { [k]: x.target.checked } })} /> {l}</label>)}
+      <div className="row mt"><label className="small muted" style={{ margin: 0 }}>Morning summary at</label><input type="number" min={0} max={23} style={{ width: 70 }} defaultValue={data.digest_hour} onBlur={(x) => save({ digest_hour: x.target.value })} /><span className="muted small">o&apos;clock (server time)</span></div>
+      <div className="row mt"><button className="btn ghost" onClick={() => test()}>Send test alert</button><button className="btn ghost" onClick={() => test(true)}>Send today&apos;s summary now</button><span className="muted small">{msg}</span></div>
+    </div>
+  );
+}
+
+function DataCard() {
+  const bk = useApi<any>("/api/backup"); const [phrase, setPhrase] = useState(""); const [msg, setMsg] = useState("");
+  return (
+    <div className="card mt" style={{ maxWidth: 620 }}>
+      <h2>Your data</h2>
+      <p className="muted small">A backup is saved automatically every day{bk.data?.lastBackupAt ? ` (last: ${new Date(bk.data.lastBackupAt).toLocaleString()})` : ""}. Download one to keep somewhere safe — it contains every guest&apos;s details.</p>
+      <div className="row wrap"><button className="btn ghost" onClick={async () => { const r = await fetch("/api/backup", { method: "POST" }); if (!r.ok) return setMsg((await r.json()).error); const blob = await r.blob(); const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = `wavio-backup-${new Date().toISOString().slice(0, 10)}.db`; a.click(); bk.reload(); }}>Download a backup</button>
+        {["contacts", "stays", "requests", "leads"].map((k) => <a key={k} className="btn ghost" href={`/api/export/${k}`}>{k} CSV</a>)}</div>
+      <h2 style={{ marginTop: 18, color: "var(--danger)" }}>Clear test data</h2>
+      <p className="muted small">Before real guests start, remove the practice guests, chats, requests and bookings. Your rooms, answers, photos, knowledge and settings stay. A backup is taken first.</p>
+      <div className="row"><input style={{ maxWidth: 260 }} placeholder="Type DELETE TEST DATA" value={phrase} onChange={(e) => setPhrase(e.target.value)} /><button className="btn danger" disabled={phrase !== "DELETE TEST DATA"} onClick={async () => { try { const r = await api("/api/admin/reset-test-data", "POST", { confirm: phrase }); setMsg(`Cleared ${r.counts.contacts} guests. Backup: ${r.backup}`); setPhrase(""); } catch (e: any) { setMsg(e.message); } }}>Clear test data</button></div><p className="muted small">{msg}</p>
     </div>
   );
 }

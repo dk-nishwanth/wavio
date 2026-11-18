@@ -198,6 +198,10 @@ export async function deliverMessage(messageId: string) {
   if (!m || m.status === "sent" || m.status === "delivered" || m.status === "read") return;
   const contact = get<Contact>("SELECT * FROM contacts WHERE id=?", m.contact_id)!;
   const cfg = wa.waConfig(m.workspace_id);
+  if ((JSON.parse(contact.tags) as string[]).includes("test-guest")) { // the Test page's pretend guest: show the reply, never message a real number
+    run("UPDATE messages SET status='sent', wa_message_id=? WHERE id=?", "test_" + messageId, messageId);
+    return;
+  }
   try {
     if (!contact.opted_in) throw Object.assign(new Error("Contact opted out"), { permanent: true });
     let waId: string;

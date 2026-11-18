@@ -25,7 +25,7 @@ export default function Leads() {
   return (
     <>
       <div className="page-head">
-        <div><h1>Leads</h1><p className="muted" style={{ margin: 0 }}>Every chat and website visitor becomes a lead. Scores update automatically from replies, orders and engagement.</p></div>
+        <div><h1>Leads</h1><p className="muted" style={{ margin: 0 }}>Every chat and website visitor becomes a lead. Scores update automatically from replies, orders and engagement.</p></div><a className="btn ghost" href="/api/export/leads">Download CSV</a>
       </div>
       <div className="grid mb">
         {Object.entries(TEMP).map(([k, t]) => (

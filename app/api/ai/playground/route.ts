@@ -18,7 +18,7 @@ export const POST = handle(async (req: Request) => {
       // the hotel bot keeps its place in the conversation in `state`, which the page sends back each turn
       const last = transcript.filter((m: any) => m.role === "user").pop();
       const r = await handleGuest(s.workspaceId, null, last?.text ?? "", { dry: true, state: b.state });
-      return json({ reply: r.replies.join("\n\n") || null, replies: r.replies, steps: r.steps, state: r.state, engine: "rules", inputTokens: 0, outputTokens: 0, escalated: r.handoff });
+      return json({ reply: r.replies.join("\n\n") || null, replies: r.replies, steps: r.steps, outputs: r.outputs, debug: r.debug, state: r.state, engine: "rules", inputTokens: 0, outputTokens: 0, escalated: r.handoff });
     }
     return json({ ...(await runConcierge(s.workspaceId, b.contactId ?? null, { dry: true, transcript })), engine: "ai" });
   } catch (e: any) {

@@ -7,6 +7,7 @@ import * as wa from "./wa";
 import { pushLeadToZoho } from "./zoho";
 import { fetchInboundMedia } from "./media";
 import { answerInbound } from "./ai";
+import { sendAlert, maybeSendDigest } from "./alerts";
 import { get as sqlGet } from "./db";
 
 type Handler = (payload: any, job: any) => Promise<void> | void;
@@ -20,6 +21,7 @@ export const handlers: Record<string, Handler> = {
     if (shouldCancel(p)) return;
     await runStep(p);
   },
+  alert: async (p) => { await sendAlert(p.workspaceId, { title: p.title, body: p.body }); },
   ai_reply: (p) => { const c = sqlGet<any>("SELECT workspace_id FROM contacts WHERE id=?", p.contactId); return c ? answerInbound(c.workspace_id, p.contactId, p.messageId) : undefined; },
   fetch_media: (p) => fetchInboundMedia(p.messageId),
   zoho_push: (p) => pushLeadToZoho(p.workspaceId, p.contactId),
@@ -36,7 +38,9 @@ export const handlers: Record<string, Handler> = {
 };
 
 /** Periodic housekeeping: queue a campaign when its schedule is due. */
+let lastDigestCheck = 0;
 export function tickScheduler() {
+  if (Date.now() - lastDigestCheck > 60_000) { lastDigestCheck = Date.now(); for (const w of all<any>("SELECT id FROM workspaces")) void maybeSendDigest(w.id).catch((e) => console.error("digest failed", e)); }
   const due = all<any>("SELECT id FROM campaigns WHERE status='scheduled' AND scheduled_at <= ?", Date.now());
   for (const c of due) {
     run("UPDATE campaigns SET status='sending' WHERE id=?", c.id);

@@ -7,6 +7,7 @@ import { cancelStay, recordStay } from "./stays";
 import { emitWebhook, queueCtaUrl, queueText, windowOpen, ensureConversation } from "./core";
 import { metaCfg } from "./metaleads";
 import { roomLoad } from "./pricing";
+import { notifyAdmins } from "./alerts";
 
 export const REQUEST_KINDS = ["booking", "cancellation", "change", "service", "callback", "complaint", "handoff", "other"] as const;
 export type RequestKind = (typeof REQUEST_KINDS)[number];
@@ -23,6 +24,15 @@ export function createRequest(ws: string, contactId: string, r: { kind: RequestK
     rid, ws, contactId, r.kind, r.summary.slice(0, 300), JSON.stringify(r.details ?? {}), auto ? "done" : "open", r.by ?? "ai", now(), auto ? now() : null);
   logActivity(ws, contactId, "request", `${r.by === "admin" ? "Request" : "AI concierge"} logged a ${r.kind} request: ${r.summary.slice(0, 120)}${auto ? " (auto-approved)" : ""}`);
   emitWebhook(ws, "request.created", { requestId: rid, kind: r.kind, summary: r.summary, contactId, autoApproved: auto });
+  if (!auto) {
+    const c = get<any>("SELECT name, phone FROM contacts WHERE id=?", contactId);
+    const who = `${c?.name || "A guest"} (+${c?.phone})`;
+    const d = r.details ?? {};
+    notifyAdmins(ws, r.kind === "handoff" ? "handoff" : "request", {
+      title: r.kind === "handoff" ? `💬 ${who} needs a person` : r.kind === "complaint" ? `⚠️ Complaint from ${who}` : `New ${r.kind} request from ${who}`,
+      body: `${r.summary}${d.check_in_date ? `\nDates: ${d.check_in_date} → ${d.check_out_date}, ${d.guests ?? "?"} guests${d.room ? `, ${d.room}` : ""}` : ""}\n\nOpen the Requests page to approve or reply.`,
+    });
+  }
   return { id: rid, status: auto ? "done" : "open", autoApproved: auto };
 }
 

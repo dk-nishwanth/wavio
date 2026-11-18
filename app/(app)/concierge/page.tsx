@@ -1,4 +1,5 @@
 "use client";
+import Link from "next/link";
 import { useRef, useState } from "react";
 import { api, useApi, when } from "@/components/api";
 
@@ -116,25 +117,7 @@ function Library() {
 }
 
 function Playground() {
-  const [log, setLog] = useState<{ role: "user" | "assistant"; text: string; steps?: any[] }[]>([]); const [state, setState] = useState<any>(undefined); const [text, setText] = useState(""); const [busy, setBusy] = useState(false); const [err, setErr] = useState("");
-  async function send() {
-    const next = [...log, { role: "user" as const, text }]; setLog(next); setText(""); setBusy(true); setErr("");
-    try { const r = await api("/api/ai/playground", "POST", { transcript: next.map(({ role, text }) => ({ role, text })), state }); setState(r.state); setLog([...next, ...(r.replies?.length ? r.replies.map((t: string, i: number) => ({ role: "assistant" as const, text: t, steps: i === r.replies.length - 1 ? r.steps : undefined })) : [{ role: "assistant" as const, text: r.reply ?? "(no reply)", steps: r.steps }])]); } catch (e: any) { setErr(e.message); }
-    setBusy(false);
-  }
-  return (
-    <div className="card" style={{ maxWidth: 640 }}>
-      <p className="muted small">Chat as a guest. Nothing is sent to anyone or saved — you see what the concierge would say and do.</p>
-      <div style={{ minHeight: 260, maxHeight: 460, overflow: "auto", display: "flex", flexDirection: "column", gap: 8, background: "var(--chat-bg)", borderRadius: 12, padding: 12 }}>
-        {log.map((m, i) => (<div key={i} style={{ alignSelf: m.role === "user" ? "flex-end" : "flex-start", maxWidth: "80%" }}>
-          <div className={"b " + (m.role === "user" ? "out" : "")} style={{ maxWidth: "100%" }}>{m.text}</div>
-          {m.steps?.map((s, j) => <div key={j} className="small muted" style={{ marginTop: 4 }}>⚙ {s.tool}({Object.values(s.input ?? {}).map((v) => JSON.stringify(v)).join(", ").slice(0, 80)}) → {s.result.slice(0, 90)}</div>)}</div>))}
-        {busy && <div className="muted small">Thinking…</div>}
-      </div>
-      {err && <p style={{ color: "var(--danger)" }}>{err}</p>}
-      <div className="row mt"><input placeholder="Type as a guest, e.g. Do you have rooms for 3 people next weekend?" value={text} onChange={(e) => setText(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && text.trim() && !busy) send(); }} /><button className="btn" disabled={busy || !text.trim()} onClick={send}>Send</button><button className="btn ghost" onClick={() => { setLog([]); setState(undefined); }}>Clear</button></div>
-    </div>
-  );
+  return <div className="card" style={{ maxWidth: 560 }}><h2>Test the bot</h2><p className="muted">Testing now has its own page, with a phone-style chat, tappable lists and buttons, and a panel showing how the bot understood each message.</p><Link className="btn" href="/test">Open Test the bot</Link></div>;
 }
 
 function HotelBot() {

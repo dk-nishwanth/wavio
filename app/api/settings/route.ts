@@ -1,5 +1,6 @@
 import { get, run } from "@/lib/db";
 import { requireSession } from "@/lib/auth";
+import { audit } from "@/lib/audit";
 import { decrypt, encrypt } from "@/lib/crypto";
 import { devToolsEnabled } from "@/lib/env";
 import { activeProvider, payCfg } from "@/lib/payments";
@@ -41,5 +42,6 @@ export const PUT = handle(async (req: Request) => {
     if (p.clear === "payu") for (const k of ["payu_key", "payu_salt"]) delete cur[k];
     run("UPDATE workspaces SET pay_json=? WHERE id=?", encrypt(JSON.stringify(cur)), s.workspaceId);
   }
+  audit(s, "settings.save", Object.keys(b).filter((k) => !/token|secret|key|pass/i.test(k)).join(", "));
   return json({ ok: true });
 });

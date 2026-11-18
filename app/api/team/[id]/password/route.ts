@@ -1,4 +1,5 @@
 import { get, run } from "@/lib/db";
+import { audit } from "@/lib/audit";
 import { hashPassword, requireSession, HttpError } from "@/lib/auth";
 import { handle, json } from "@/lib/http";
 
@@ -14,5 +15,6 @@ export const POST = handle(async (req: Request, { params }: Ctx) => {
   const { password } = await req.json();
   if (String(password ?? "").length < 8) throw new HttpError(400, "Password must be at least 8 characters");
   run("UPDATE users SET password_hash=?, session_version=? WHERE id=?", hashPassword(password), (u.session_version ?? 0) + 1, id);
+  audit(s, "team.reset-password", u.email);
   return json({ ok: true });
 });

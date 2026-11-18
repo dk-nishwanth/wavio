@@ -1,4 +1,5 @@
 import { get, run } from "@/lib/db";
+import { audit } from "@/lib/audit";
 import { COOKIE, makeSession, verifyPassword } from "@/lib/auth";
 import { handle, json } from "@/lib/http";
 import { clear, clientIp, hit, isBlocked } from "@/lib/ratelimit";
@@ -16,6 +17,7 @@ export const POST = handle(async (req: Request) => {
     return json({ error: "Invalid email or password" }, 401);
   }
   clear(userKey);
+  audit({ workspaceId: u.workspace_id, userId: u.id, name: u.name }, "login");
   const res = json({ ok: true });
   res.cookies.set("session", makeSession(u.id, u.session_version ?? 0), COOKIE);
   void run;

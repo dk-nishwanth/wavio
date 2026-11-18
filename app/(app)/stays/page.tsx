@@ -28,7 +28,7 @@ export default function Stays() {
 
   return (
     <>
-      <div className="page-head"><div><h1>Stays</h1><p className="muted" style={{ margin: 0 }}>Who is arriving, in the house and leaving, and which rooms are taken. Bookings approved from Requests appear here automatically.</p></div></div>
+      <div className="page-head"><div><h1>Stays</h1><p className="muted" style={{ margin: 0 }}>Who is arriving, in the house and leaving, and which rooms are taken. Bookings approved from Requests appear here automatically.</p></div><a className="btn ghost" href="/api/export/stays">Download CSV</a></div>
       <div className="grid mb">
         {[["Arriving today", live.filter((s) => s.check_in_date === today)], ["In the house", live.filter((s) => s.status === "in_house")], ["Leaving today", live.filter((s) => s.check_out_date === today)], ["Arriving tomorrow", live.filter((s) => s.check_in_date === addDays(today, 1))]].map(([t, list]: any) => (
           <div key={t} className="card"><span className="muted small">{t}</span><div style={{ fontSize: 28, fontWeight: 600 }}>{list.length}</div><div className="small muted">{list.slice(0, 3).map((s: any) => s.name || s.phone).join(", ")}</div></div>))}

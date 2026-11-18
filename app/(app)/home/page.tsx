@@ -26,6 +26,7 @@ export default function Home() {
   const convs = useApi<any[]>("/api/conversations?filter=all", 5000);
   const stays = useApi<any[]>("/api/stays", 10000);
   const setup = useApi<any>("/api/setup/status", 15000);
+  const sec = useApi<any>("/api/account/security");
   const s = stats.data;
   const steps: { done: boolean; title: string; body: string; href: string }[] = (setup.data?.steps ?? []).map((x: any) => ({ done: x.done, title: x.title, body: "", href: x.href }));
   const doneCount = steps.filter((x) => x.done).length;
@@ -36,6 +37,7 @@ export default function Home() {
         {settings.data && <span className={"status" + (settings.data.mock ? "" : " live")}><i />{settings.data.mock ? "Test mode" : "WhatsApp connected"}</span>}
       </div>
 
+      {sec.data?.weakPassword && <div className="banner">Your password is easy to guess. <Link href="/settings" style={{ textDecoration: "underline" }}>Choose a stronger one in Settings</Link> before real guests use this.</div>}
       <div className="grid mb">
         <Stat icon="users" label="Contacts" value={s?.contacts ?? "–"} />
         <Stat icon="chat" label="Open conversations" value={s?.openConversations ?? "–"} />

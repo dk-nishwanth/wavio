@@ -1,4 +1,5 @@
 import { all } from "@/lib/db";
+import { audit } from "@/lib/audit";
 import { requireSession } from "@/lib/auth";
 import { handle, json } from "@/lib/http";
 import { ALL_ACTIONS, getAgent, repliesThisMonth } from "@/lib/ai";
@@ -34,5 +35,6 @@ export const PUT = handle(async (req: Request) => {
   if (b.aiKey) { cfg.ai_key = encrypt(String(b.aiKey).trim()); changed = true; }
   if (b.clearAiKey) { delete cfg.ai_key; changed = true; }
   if (changed) saveMetaCfg(s.workspaceId, cfg);
+  audit(s, "bot.settings", `engine ${b.engine ?? ""}, ${b.enabled && b.auto_reply ? "on" : "off"}`);
   return json({ ok: true });
 });

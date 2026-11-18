@@ -12,7 +12,7 @@ export default function Requests() {
   const [msg, setMsg] = useState("");
   return (
     <>
-      <div className="page-head"><div><h1>Requests</h1><p className="muted" style={{ margin: 0 }}>What guests asked the concierge for. Bookings, cancellations and changes wait here for your approval.</p></div></div>
+      <div className="page-head"><div><h1>Requests</h1><p className="muted" style={{ margin: 0 }}>What guests asked the concierge for. Bookings, cancellations and changes wait here for your approval.</p></div><a className="btn ghost" href="/api/export/requests">Download CSV</a></div>
       <div className="row mb">{["open", "approved", "done", "declined", "all"].map((f) => <span key={f} className="chip" style={{ cursor: "pointer", background: filter === f ? "var(--brand)" : "", color: filter === f ? "var(--on-brand)" : "" }} onClick={() => setFilter(f)}>{f}{f === "open" && data?.open ? ` (${data.open})` : ""}</span>)}</div>
       {msg && <div className="banner">{msg}</div>}
       <div style={{ display: "grid", gap: 12, maxWidth: 820 }}>

@@ -1,4 +1,5 @@
 import { all, get, id, now, run } from "@/lib/db";
+import { audit } from "@/lib/audit";
 import { requireSession, hashPassword, HttpError } from "@/lib/auth";
 import { handle, json } from "@/lib/http";
 import { assertCan } from "@/lib/billing";
@@ -17,5 +18,6 @@ export const POST = handle(async (req: Request) => {
   if (get("SELECT 1 FROM users WHERE email=?", email)) throw new HttpError(409, "That email/username is already taken");
   assertCan(s.workspaceId, "seat");
   run("INSERT INTO users (id, workspace_id, email, name, password_hash, role, created_at) VALUES (?,?,?,?,?,?,?)", id("u_"), s.workspaceId, email, b.name || email, hashPassword(b.password), b.role === "admin" ? "admin" : "agent", now());
+  audit(s, "team.add", email);
   return json({ ok: true });
 });

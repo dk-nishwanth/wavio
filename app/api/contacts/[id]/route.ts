@@ -1,4 +1,5 @@
 import { run, get } from "@/lib/db";
+import { audit } from "@/lib/audit";
 import { requireSession, HttpError } from "@/lib/auth";
 import { handle, json } from "@/lib/http";
 
@@ -21,5 +22,6 @@ export const DELETE = handle(async (_: Request, { params }: Ctx) => {
   run("DELETE FROM messages WHERE contact_id=? AND workspace_id=?", id, s.workspaceId);
   run("DELETE FROM conversations WHERE contact_id=? AND workspace_id=?", id, s.workspaceId);
   run("DELETE FROM contacts WHERE id=? AND workspace_id=?", id, s.workspaceId);
+  audit(s, "contact.delete", id);
   return json({ ok: true });
 });

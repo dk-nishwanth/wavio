@@ -124,7 +124,7 @@ export default function Inbox() {
 
       <div className="info">
         {c && (<>
-          <h2>Contact</h2>
+          <div className="row between"><h2 style={{ margin: 0 }}>Contact</h2><a className="small muted" href={`/api/export/messages?contactId=${c.contact_id}`}>export chat</a></div>
           <p style={{ margin: 0 }}>{c.name || "—"}<br /><span className="muted">+{c.phone}</span><br /><span className="muted">{c.email}</span></p>
           <label>Tags</label>
           <div>{c.tags.map((t: string) => <span key={t} className="pill">{t}</span>)}</div>
