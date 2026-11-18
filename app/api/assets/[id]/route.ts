@@ -2,6 +2,7 @@ import fs from "node:fs";
 import { get, run } from "@/lib/db";
 import { requireSession, HttpError } from "@/lib/auth";
 import { handle, json } from "@/lib/http";
+import { clearVocabCache } from "@/lib/fuzzy";
 import { resolveMedia } from "@/lib/media";
 
 type Ctx = { params: Promise<{ id: string }> };
@@ -22,6 +23,7 @@ export const PATCH = handle(async (req: Request, { params }: Ctx) => {
   const { id } = await params;
   const b = await req.json();
   run("UPDATE assets SET label=COALESCE(?,label), description=COALESCE(?,description) WHERE id=? AND workspace_id=?", b.label?.slice(0, 80) ?? null, b.description?.slice(0, 300) ?? null, id, s.workspaceId);
+  clearVocabCache();
   return json({ ok: true });
 });
 
@@ -29,5 +31,6 @@ export const DELETE = handle(async (_: Request, { params }: Ctx) => {
   const s = await requireSession();
   const { id } = await params;
   run("DELETE FROM assets WHERE id=? AND workspace_id=?", id, s.workspaceId);
+  clearVocabCache();
   return json({ ok: true });
 });

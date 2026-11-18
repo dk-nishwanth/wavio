@@ -1,6 +1,7 @@
 import { all, id, now, run } from "@/lib/db";
 import { requireSession, HttpError } from "@/lib/auth";
 import { handle, json } from "@/lib/http";
+import { clearVocabCache } from "@/lib/fuzzy";
 import { checkUpload, extFor, saveFile } from "@/lib/media";
 
 /** The media library: room photos, brochures, menus. The AI concierge can send these by name. */
@@ -21,5 +22,6 @@ export const POST = handle(async (req: Request) => {
   const label = String(form.get("label") ?? "").trim().slice(0, 80) || file.name.replace(/\.[^.]+$/, "").slice(0, 80);
   run("INSERT INTO assets (id, workspace_id, path, mime, name, kind, label, description, created_at) VALUES (?,?,?,?,?,?,?,?,?)",
     aid, s.workspaceId, rel, mime, file.name.replace(/[^\w.\- ]/g, "_").slice(0, 80), rule.kind, label, String(form.get("description") ?? "").slice(0, 300), now());
+  clearVocabCache();
   return json({ id: aid });
 });

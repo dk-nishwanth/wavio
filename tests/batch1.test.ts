@@ -155,3 +155,28 @@ describe("audit log", () => {
   });
 });
 void upsertContact;
+
+import { FAQ_TEMPLATES, saveSetupFaqs, setupStatus } from "../lib/setup";
+describe("setup wizard", () => {
+  it("turns answered questions into FAQs without ever duplicating them", () => {
+    expect(saveSetupFaqs(ws, { wifi: "Free Wi-Fi everywhere.", parking: "  ", pets: "Pets welcome." })).toBe(2);
+    expect(saveSetupFaqs(ws, { wifi: "Free fast Wi-Fi everywhere." })).toBe(1);
+    const faqs = all<any>("SELECT keywords, answer FROM bot_faqs WHERE workspace_id=? AND keywords LIKE '%wifi%'", ws);
+    expect(faqs.length).toBe(1);
+    expect(faqs[0].answer).toBe("Free fast Wi-Fi everywhere.");
+  });
+  it("the taught answers are found through typos and Hinglish", async () => {
+    saveSetupFaqs(ws, { parking: "Free parking for all guests." });
+    for (const q of ["is der parkin", "parking hai kya", "wat abt wifi", "wi-fi pls", "wifii available?", "do u allow dogs", "petss allowed"]) {
+      const r = await handleGuest(ws, null, q, { dry: true });
+      expect(r.replies.join(" "), q).toMatch(/parking|Wi-Fi|Pets welcome/);
+    }
+  });
+  it("reports what is left to do", () => {
+    const st = setupStatus(ws);
+    expect(st.total).toBe(6);
+    expect(st.steps.find((s) => s.key === "rooms")!.done).toBe(true);
+    expect(st.steps.find((s) => s.key === "whatsapp")!.done).toBe(false);
+    expect(FAQ_TEMPLATES.length).toBeGreaterThanOrEqual(15);
+  });
+});

@@ -25,14 +25,9 @@ export default function Home() {
   const autos = useApi<any[]>("/api/automations");
   const convs = useApi<any[]>("/api/conversations?filter=all", 5000);
   const stays = useApi<any[]>("/api/stays", 10000);
+  const setup = useApi<any>("/api/setup/status", 15000);
   const s = stats.data;
-  const steps = [
-    { done: settings.data ? !settings.data.mock : false, title: "Connect WhatsApp", body: "Add your Cloud API credentials, or keep using test mode.", href: "/settings" },
-    { done: (tpls.data?.length ?? 0) > 0, title: "Create a message template", body: "Templates let you message customers outside the 24-hour window.", href: "/templates" },
-    { done: (s?.contacts ?? 0) > 0, title: "Add your contacts", body: "Import a CSV of opted-in customers.", href: "/contacts" },
-    { done: (autos.data?.length ?? 0) > 0, title: "Set up automations", body: "Install the resort starter pack, or build your own chatbot flow.", href: "/automations" },
-    { done: false, title: "Connect your website", body: "Install the React SDK and send events from your site.", href: "/developers" },
-  ];
+  const steps: { done: boolean; title: string; body: string; href: string }[] = (setup.data?.steps ?? []).map((x: any) => ({ done: x.done, title: x.title, body: "", href: x.href }));
   const doneCount = steps.filter((x) => x.done).length;
   return (
     <>

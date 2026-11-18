@@ -2,6 +2,7 @@ import dns from "node:dns/promises";
 import net from "node:net";
 import { all, get, id, now, run } from "./db";
 import { HttpError } from "./auth";
+import { clearVocabCache } from "./fuzzy";
 
 const MAX_CHARS = 400_000;
 const MAX_SOURCES = 200;
@@ -40,6 +41,7 @@ export function addText(ws: string, title: string, text: string, kind = "text", 
     run("INSERT INTO kb_chunks (id, workspace_id, source_id, ord, text) VALUES (?,?,?,?,?)", cid, ws, sid, i, t);
     run("INSERT INTO kb_fts (text, chunk_id, workspace_id) VALUES (?,?,?)", t, cid, ws);
   });
+  clearVocabCache();
   return sid;
 }
 
@@ -47,6 +49,7 @@ export function deleteSource(ws: string, sourceId: string) {
   for (const c of all<any>("SELECT id FROM kb_chunks WHERE source_id=? AND workspace_id=?", sourceId, ws)) run("DELETE FROM kb_fts WHERE chunk_id=?", c.id);
   run("DELETE FROM kb_chunks WHERE source_id=? AND workspace_id=?", sourceId, ws);
   run("DELETE FROM kb_sources WHERE id=? AND workspace_id=?", sourceId, ws);
+  clearVocabCache();
 }
 
 const STOP = new Set("a an the is are was were be to of and or in on at for with do does can i you we it this that what how when where which who please my your our me tell about there any have has".split(" "));

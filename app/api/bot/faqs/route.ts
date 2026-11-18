@@ -1,6 +1,7 @@
 import { all, id, now, run } from "@/lib/db";
 import { requireSession, HttpError } from "@/lib/auth";
 import { handle, json } from "@/lib/http";
+import { clearVocabCache } from "@/lib/fuzzy";
 import { resolveCovered, resolveMiss } from "@/lib/learning";
 
 export const GET = handle(async () => {
@@ -18,5 +19,6 @@ export const POST = handle(async (req: Request) => {
   run("INSERT INTO bot_faqs (id, workspace_id, keywords, answer, asset_label, created_at) VALUES (?,?,?,?,?,?)", fid, s.workspaceId, keywords.slice(0, 500), String(b.answer).slice(0, 1500), b.asset_label ? String(b.asset_label).slice(0, 80) : null, now());
   if (b.miss_id) resolveMiss(s.workspaceId, String(b.miss_id));
   resolveCovered(s.workspaceId, keywords);
+  clearVocabCache();
   return json({ id: fid });
 });
